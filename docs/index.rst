@@ -1,9 +1,9 @@
-.. colcon-runner documentation master file, created by
+.. colcon_runner documentation master file, created by
    sphinx-quickstart on Mon Nov 27 15:01:32 2023.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to colcon-runner's documentation!
+Welcome to colcon_runner's documentation!
 ===========================================
 
 .. toctree::

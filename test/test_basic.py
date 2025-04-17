@@ -1,6 +1,5 @@
 from unittest import TestCase
-from colcon-runner.basic_class import BasicClass
-
+from colcon_runner.basic_class import BasicClass
 
 class TestBasicClass(TestCase):
     def test_init(self):
