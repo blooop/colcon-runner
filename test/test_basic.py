@@ -9,21 +9,12 @@ import unittest
 import os
 from unittest import mock
 
-# Import the module under a stable name regardless of file location.
-# import importlib.util
-
-# spec = importlib.util.spec_from_loader("cr", loader=None)
-# cr = importlib.util.module_from_spec(spec)  # type: ignore[assignment]
+# Import the module under test
 from colcon_runner import cr
-
-# Inject the code from this file (up to this point) so that the tests have access.
-# NOTE: When the file is split into separate modules, simply `import cr` instead.
-
-_module_source = __doc__.split("# ==================================================")[0]
-exec(_module_source, cr.__dict__)
 
 
 class ParseVerbTests(unittest.TestCase):
+    # pylint: disable=protected-access
     def test_valid_pairs(self):
         self.assertEqual(cr._parse_verbs("ba"), [("b", "a")])
         self.assertEqual(cr._parse_verbs("boto"), [("b", "o"), ("t", "o")])
@@ -42,6 +33,7 @@ class ParseVerbTests(unittest.TestCase):
 
 
 class BuildCommandTests(unittest.TestCase):
+    # pylint: disable=protected-access
     def test_build_all(self):
         cmd = cr._build_colcon_cmd("b", "a", None)
         self.assertEqual(cmd, ["colcon", "build"])
@@ -58,9 +50,13 @@ class BuildCommandTests(unittest.TestCase):
 class IntegrationTests(unittest.TestCase):
     def setUp(self):
         # Use a temporary config location so we don't clobber the user's file.
-        self.tmp_cfg = tempfile.NamedTemporaryFile(delete=False)
-        self.addCleanup(os.unlink, self.tmp_cfg.name)
-        os.environ["CR_CONFIG"] = self.tmp_cfg.name
+        # Use tempfile.mkstemp to create a file descriptor and path we can use
+        fd, self.tmp_file_path = tempfile.mkstemp()
+        os.close(fd)  # Close file descriptor but keep the file
+        self.addCleanup(
+            lambda: os.path.exists(self.tmp_file_path) and os.unlink(self.tmp_file_path)
+        )
+        os.environ["CR_CONFIG"] = self.tmp_file_path
 
     def test_set_default_and_dry_run(self):
         # Patch subprocess.run so no real commands are executed.
@@ -69,6 +65,10 @@ class IntegrationTests(unittest.TestCase):
 
             # Set default package
             cr.main(["s", "demo_pkg"])
+
+            # Use a public method or mock here if one exists, but for tests it's acceptable to
+            # test internal functionality
+            # pylint: disable=protected-access
             self.assertEqual(cr._load_default_package(), "demo_pkg")
 
             # Issue a compound command using the default + dry‑run

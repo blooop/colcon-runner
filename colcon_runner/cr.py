@@ -37,7 +37,7 @@ def _load_default_package() -> str | None:
     if not CONFIG_PATH.exists():
         return None
     try:
-        with CONFIG_PATH.open() as fp:
+        with CONFIG_PATH.open(encoding="utf-8") as fp:
             return json.load(fp).get("default_package")  # type: ignore[arg-type]
     except (json.JSONDecodeError, OSError):
         return None
@@ -45,7 +45,7 @@ def _load_default_package() -> str | None:
 
 def _save_default_package(pkg: str) -> None:
     """Persist *pkg* as the default package."""
-    CONFIG_PATH.write_text(json.dumps({"default_package": pkg}))
+    CONFIG_PATH.write_text(json.dumps({"default_package": pkg}), encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
