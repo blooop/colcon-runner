@@ -128,7 +128,6 @@ def _build_all_cmds(parsed: Sequence[VerbSpec], pkg: str | None) -> List[List[st
 def main(argv: Sequence[str] | None = None) -> int:  # noqa: C901 – top‑level function
     argv = list(argv or sys.argv[1:]) or ["ba"]
 
-
     parser = argparse.ArgumentParser(
         prog="cr",
         description="Colcon Runner – concise wrapper around common *colcon* tasks.",
