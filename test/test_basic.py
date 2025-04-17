@@ -1,7 +1,3 @@
-from unittest import TestCase
-from colcon_runner.basic_class import BasicClass
-
-
 # ==================================================
 # test_cr.py – basic unit tests for the *cr* module
 # ==================================================
@@ -9,16 +5,16 @@ from colcon_runner.basic_class import BasicClass
 import contextlib
 import io
 import tempfile
-import types
 import unittest
-from pathlib import Path
+import os
 from unittest import mock
 
 # Import the module under a stable name regardless of file location.
-import importlib.util
+# import importlib.util
 
-spec = importlib.util.spec_from_loader("cr", loader=None)
-cr = importlib.util.module_from_spec(spec)  # type: ignore[assignment]
+# spec = importlib.util.spec_from_loader("cr", loader=None)
+# cr = importlib.util.module_from_spec(spec)  # type: ignore[assignment]
+from colcon_runner import cr
 
 # Inject the code from this file (up to this point) so that the tests have access.
 # NOTE: When the file is split into separate modules, simply `import cr` instead.
