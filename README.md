@@ -1,4 +1,4 @@
-# python_template
+# colcon_runner
 A template repo for python projects that is set up using [pixi](https://pixi.sh). 
 
 This has basic setup for
@@ -16,81 +16,95 @@ This has basic setup for
 
 ## Continuous Integration Status
 
-[![Ci](https://github.com/blooop/python_template/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/blooop/python_template/actions/workflows/ci.yml?query=branch%3Amain)
-[![Codecov](https://codecov.io/gh/blooop/python_template/branch/main/graph/badge.svg?token=Y212GW1PG6)](https://codecov.io/gh/blooop/python_template)
-[![GitHub issues](https://img.shields.io/github/issues/blooop/python_template.svg)](https://GitHub.com/blooop/python_template/issues/)
-[![GitHub pull-requests merged](https://badgen.net/github/merged-prs/blooop/python_template)](https://github.com/blooop/python_template/pulls?q=is%3Amerged)
-[![GitHub release](https://img.shields.io/github/release/blooop/python_template.svg)](https://GitHub.com/blooop/python_template/releases/)
-[![License](https://img.shields.io/github/license/blooop/python_template)](https://opensource.org/license/mit/)
+[![Ci](https://github.com/blooop/colcon_runner/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/blooop/colcon_runner/actions/workflows/ci.yml?query=branch%3Amain)
+[![Codecov](https://codecov.io/gh/blooop/colcon_runner/branch/main/graph/badge.svg?token=Y212GW1PG6)](https://codecov.io/gh/blooop/colcon_runner)
+[![GitHub issues](https://img.shields.io/github/issues/blooop/colcon_runner.svg)](https://GitHub.com/blooop/colcon_runner/issues/)
+[![GitHub pull-requests merged](https://badgen.net/github/merged-prs/blooop/colcon_runner)](https://github.com/blooop/colcon_runner/pulls?q=is%3Amerged)
+[![GitHub release](https://img.shields.io/github/release/blooop/colcon_runner.svg)](https://GitHub.com/blooop/colcon_runner/releases/)
+[![License](https://img.shields.io/github/license/blooop/colcon_runner)](https://opensource.org/license/mit/)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/downloads/)
 [![Pixi Badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json)](https://pixi.sh)
 
-
-# Install
-
-There are two methods of using this project.  
-
-1. Use github to use this project as a template
-2. Clone the project and run, `scripts/update_from_template.sh` and then run the `scripts/rename_project.sh` to rename the project.
-
-If you want to use docker you may want to run the `scripts/setup_host.sh` script.  It will set up docker and nvidia-docker (assuming you are on ubuntu22.04).
-
-If you are using pixi, look at the available tasks in pyproject.toml  If you are new to pixi follow the instructions on the pixi [website](https://prefix.dev/)
-
-# Github setup
-
-There are github workflows for CI, codecov and automated pypi publishing in `ci.yml` and `publish.yml`.
-
-ci.yml uses pixi tasks to set up the environment matrix and run the various CI tasks. To set up codecov on github, you need to get a `CODECOV_TOKEN` and add it to your actions secrets.
-
-publish.yml uses [pypy-auto-publish](https://github.com/marketplace/actions/python-auto-release-pypi-github) to automatically publish to pypi if the package version number changes. You need to add a `PYPI_API_TOKEN` to your github secrets to enable this.     
-
-
-# Usage
-
-There are currently two ways of running code.  The preferred way is to use pixi to manage your environment and dependencies. 
-
-```bash
-cd project
-
-$pixi run ci
-pixi run arbitrary_task
 ```
+CR(1)                         User Commands                        CR(1)
 
-If you have dependencies or configuration that cannot be managed by pixi, you can use alternative tools:
+NAME
+    cr - Colcon Runner: concise CLI for common colcon tasks.
 
-- [rockerc](https://github.com/blooop/rockerc): A command-line tool for dynamically creating docker containers with access to host resources such as GPU and 
-- [rockervsc](https://github.com/blooop/rockervsc): A Visual Studio Code extension that integrates rockerc functionality into [vscode remote containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers).
+SYNOPSIS
+    cr VERB [PKG] [OPTIONS]
 
-These tools help you create isolated environments with specific dependencies, ensuring consistent setups across different machines.
+DESCRIPTION
+    A minimal wrapper around colcon providing short, mnemonic commands
+    for build, test, clean, and package selection operations.
 
-```bash
-cd project_name
+STATE
+    s       set a default package for subsequent commands.
 
-rockerc # build and launch container with dependencies set up
-# OR
-rockervsc # build container, launch and attach vscode to that container.
+VERBS
+    b       build packages.
+    t       Test packages.
+    c       clean packages.
 
-#once you are inside the container you can use the pixi workflows.
-pixi run ci
+SPECIFIER   
+    o       only (--packages-select)
+    u       upto (--packages-up-to)
+    a       all
+
+Each verb must have a specifier after it, and you can chain as many verb-specifier pairs as you want.  You can set a default package to use, for all subsequent commands, or you can specify a package in the command itself.
+
+USAGE EXAMPLES
+
+  Basic Commands:
+    cr 
+        Build all packages. (default action)
+
+    cr ba
+        Build all packages. (explicit)
+
+    cr bo pkg_1
+        Build only 'pkg_1'.
+
+    cr bu pkg_1
+        Build upto 'pkg_1' and its dependencies.
+
+    cr ta
+        Test all packages.
+
+    cr to pkg_1
+        Test only 'pkg_1'.
+
+    cr tu pkg_1
+        Test upto 'pkg_1' and its dependencies.
+
+    cr ca
+        Clean all (build/, install/, and log/ directories)
+
+    cr co pkg_1
+        Clean only 'pkg_1'.
+
+    cr cu pkg_1
+        Clean upto 'pkg_1'.
+
+  Compound Commands:
+    cr s pkg1
+        Set 'pkg_1' as the default package for subsequent commands.
+
+    cr cabu
+        Clean all and build up to 'pkg1'.
+
+    cr boto
+        build only 'pkg1' package, then test only 'pkg1'.
+
+    cr cabuto 
+        Clean all, build up to 'pkg1', and test only 'pkg1'.
+
+
+NOTES
+    - The 's' verb sets a default package name stored in a configuration file.
+    - Subsequent commands that require a package argument will use the default if none is provided.
+    - Compound verbs can be chained together for streamlined operations.
+
+SEE ALSO
+    colcon(1), colcon-clean(1)
 ```
-
-## Legacy
-
-If you don't want to install rocker on your system but want to use vscode, you can run the `scripts/launch_vscode.sh` script to build and connect to a docker container. It will install rocker in a venv.  The docker container is dynamically generated using [rocker](https://github.com/osrf/rocker) and [deps rocker](https://github.com/blooop/deps_rocker).  [deps rocker](https://github.com/blooop/deps_rocker) looks at the python_template.deps.yaml file to install any required apt, pip or shell scripts and launches a container that vscode attaches to. 
-
-## Troubleshooting
-
-The main pixi tasks are related to CI.  Github actions runs the pixi task "ci".  The CI is mostly likely to fail from a lockfile mismatch.  Use `pixi run fix` to fix any lockfile related problems. 
-
-## vscode tasks
-
-There are two core tasks.  
-
-1. set \<cfg\> from active file
-
-    This sets \<cfg\> to the currently opened file in the editor
-
-2. run \<cfg\>
-
-    This runs python with the file set in \<cfg\>

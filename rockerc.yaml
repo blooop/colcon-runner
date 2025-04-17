@@ -7,8 +7,6 @@
 
 image: ubuntu:22.04
 args:
-  - nvidia
-  - x11 
   - user 
   - pull 
   - deps
