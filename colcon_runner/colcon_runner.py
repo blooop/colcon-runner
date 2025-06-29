@@ -1,187 +1,214 @@
 #!/usr/bin/env python3
-"""Colcon Runner (cr): a concise CLI wrapper around common *colcon* tasks.
+"""
+CR(1)                         User Commands                        CR(1)
 
-Usage pattern (see README for full details):
-    cr VERB[SPEC] [PKG] [--dry-run]
+NAME
+    cr - Colcon Runner: concise CLI for common colcon tasks.
 
-Examples:
-    cr ba              # build *all* packages
-    cr bo my_pkg       # build *only* my_pkg
-    cr cu my_pkg       # clean *up‑to* my_pkg (and its deps)
-    cr cabu            # clean all, then build up‑to default pkg
+SYNOPSIS
+    cr VERB [PKG] [OPTIONS]
 
-The single‑letter verbs map to *colcon* sub‑commands, while specifiers
-convert to the appropriate package‑selection flags.
+DESCRIPTION
+    A minimal wrapper around colcon providing short, mnemonic commands
+    for build, test, clean, and package selection operations.
+
+STATE
+    s       set a default package for subsequent commands.
+
+VERBS
+    b       build packages.
+    t       Test packages.
+    c       clean packages.
+
+SPECIFIER
+    o       only (--packages-select)
+    u       upto (--packages-up-to)
+    a       all
+
+Each verb must have a specifier after it, and you can chain as many verb-specifier pairs as you want.  You can set a default package to use, for all subsequent commands, or you can specify a package in the command itself.
+
+USAGE EXAMPLES
+
+  Basic Commands:
+    cr ba
+        Build all packages. (explicit)
+
+    cr bo pkg_1
+        Build only 'pkg_1'.
+
+    cr bu pkg_1
+        Build upto 'pkg_1' and its dependencies.
+
+    cr ta
+        Test all packages.
+
+    cr to pkg_1
+        Test only 'pkg_1'.
+
+    cr tu pkg_1
+        Test upto 'pkg_1' and its dependencies.
+
+    cr ca
+        Clean workspace (build/, install/, log/, and test_result/ directories)
+
+    cr co pkg_1
+        Clean only 'pkg_1'.
+
+    cr cu pkg_1
+        Clean upto 'pkg_1'.
+
+  Compound Commands:
+    cr s pkg1
+        Set 'pkg_1' as the default package for subsequent commands.
+
+    cr cabu
+        Clean all and build up to 'pkg1'.
+
+    cr boto
+        build only 'pkg1' package, then test only 'pkg1'.
+
+    cr cabuto
+        Clean all, build up to 'pkg1', and test only 'pkg1'.
+
+
+NOTES
+    - The 's' verb sets a default package name stored in a configuration file.
+    - Subsequent commands that require a package argument will use the default if none is provided.
+    - Compound verbs can be chained together for streamlined operations.
+
+SEE ALSO
+    colcon(1), colcon-clean(1)
 """
 
-from __future__ import annotations
-
-import argparse
-import json
+import sys
 import os
 import subprocess
-import sys
-from pathlib import Path
-from typing import List, Sequence, Tuple
+from typing import Optional, List
 
-# ---------------------------------------------------------------------------
-# Configuration helpers
-# ---------------------------------------------------------------------------
-
-# Allow the config file location to be overridden in tests via $CR_CONFIG.
-CONFIG_PATH = Path(os.environ.get("CR_CONFIG", Path.home() / ".cr_config.json"))
+PKG_FILE: str = os.path.expanduser("~/.colcon_shortcuts_pkg")
 
 
-def _load_default_package() -> str | None:
-    """Return the stored default package name, or *None* if unset/invalid."""
-    if not CONFIG_PATH.exists():
-        return None
-    try:
-        with CONFIG_PATH.open(encoding="utf-8") as fp:
-            return json.load(fp).get("default_package")  # type: ignore[arg-type]
-    except (json.JSONDecodeError, OSError):
-        return None
+def load_default_pkg() -> Optional[str]:
+    if os.path.isfile(PKG_FILE):
+        with open(PKG_FILE, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    return None
 
 
-def _save_default_package(pkg: str) -> None:
-    """Persist *pkg* as the default package."""
-    CONFIG_PATH.write_text(json.dumps({"default_package": pkg}), encoding="utf-8")
+def save_default_pkg(pkg: str) -> None:
+    with open(PKG_FILE, "w", encoding="utf-8") as f:
+        f.write(pkg)
+    print(f"Default package set to '{pkg}'")
 
 
-# ---------------------------------------------------------------------------
-# Parsing helpers
-# ---------------------------------------------------------------------------
-
-action_map: dict[str, str] = {
-    "b": "build",
-    "t": "test",
-    "c": "clean",
-}
-
-specifier_flags: dict[str, List[str] | None] = {
-    "a": None,  # all packages – no extra flags
-    "o": ["--packages-select"],
-    "u": ["--packages-up-to"],
-}
+def error(msg: str) -> None:
+    print(f"Error: {msg}", file=sys.stderr)
+    sys.exit(1)
 
 
-class ParseError(RuntimeError):
-    """Raised when the verb string is malformed."""
+def get_pkg(override: Optional[str]) -> str:
+    if override:
+        return override
+    default = load_default_pkg()
+    if default:
+        return default
+    error("no package specified and no default set")
 
 
-VerbSpec = Tuple[str, str | None]
+def run_colcon(args: List[str], extra_opts: List[str]) -> None:
+    cmd = ["colcon"] + args + extra_opts
+    print("+ " + " ".join(cmd))
+    ret = subprocess.call(cmd)
+    if ret != 0:
+        sys.exit(ret)
 
 
-def _parse_verbs(verb_str: str) -> List[VerbSpec]:
-    """Convert *verb_str* into a list of ``(verb, spec)`` tuples.
+def main() -> None:
+    if len(sys.argv) < 2:
+        print(__doc__)
+        sys.exit(1)
 
-    The special verb ``s`` (set default) has no specifier and must appear
-    alone.
-    """
-    if verb_str == "s":
-        return [("s", None)]
+    cmds: str = sys.argv[1]
+    rest: List[str] = sys.argv[2:]
 
-    if len(verb_str) % 2:  # must be pairs of two characters
-        raise ParseError(f"Odd number of characters in verb string '{verb_str}'.")
+    # extract override pkg (first non-dash arg)
+    override_pkg: Optional[str] = None
+    extra_opts: List[str] = []
+    for arg in rest:
+        if not arg.startswith("-") and override_pkg is None:
+            override_pkg = arg
+        else:
+            extra_opts.append(arg)
 
-    parsed: List[VerbSpec] = []
-    for v, s in zip(verb_str[::2], verb_str[1::2]):
-        if v not in action_map:
-            raise ParseError(f"Unknown verb '{v}' in '{verb_str}'.")
-        if s not in specifier_flags:
-            raise ParseError(f"Unknown specifier '{s}' in '{verb_str}'.")
-        parsed.append((v, s))
-    return parsed
+    # parse cmds into segments of (verb, specifiers)
+    primaries: List[str] = []
+    specs: List[List[str]] = []
+    i: int = 0
+    while i < len(cmds):
+        if cmds[i] in ("s", "b", "t", "c"):
+            primaries.append(cmds[i])
 
+            # For "s" command, specifier is not required
+            if cmds[i] == "s":
+                specs.append([])
+                i += 1
+                continue
 
-# ---------------------------------------------------------------------------
-# Command builder
-# ---------------------------------------------------------------------------
+            # For other commands, require a specifier
+            if i + 1 >= len(cmds) or cmds[i + 1] not in ("o", "u", "a"):
+                error(f"verb '{cmds[i]}' must be followed by a specifier (o, u, or a)")
 
+            specs.append([cmds[i + 1]])
+            i += 2
+        else:
+            error(f"unknown command letter '{cmds[i]}'")
 
-def _build_colcon_cmd(verb: str, spec: str, pkg: str | None) -> List[str]:
-    """Return the concrete *colcon* command for a verb/spec pair."""
-    base = ["colcon", action_map[verb]]
-
-    flags = specifier_flags[spec]
-    if flags is None:  # 'a' – no package‑selection flag
-        return base
-
-    if not pkg:
-        raise ParseError("Package name required for 'only'/'up‑to' specifiers.")
-
-    return base + flags + [pkg]
-
-
-# ---------------------------------------------------------------------------
-# Public CLI entry‑point
-# ---------------------------------------------------------------------------
-
-
-def _build_all_cmds(parsed: Sequence[VerbSpec], pkg: str | None) -> List[List[str]]:
-    cmds: List[List[str]] = []
-    for verb, spec in parsed:
-        cmds.append(_build_colcon_cmd(verb, spec, pkg))
-    return cmds
-
-
-def main(argv: Sequence[str] | None = None) -> int:  # noqa: C901 – top‑level function
-    argv = list(argv or sys.argv[1:]) or ["ba"]
-
-    parser = argparse.ArgumentParser(
-        prog="cr",
-        description="Colcon Runner – concise wrapper around common *colcon* tasks.",
-    )
-    parser.add_argument("verbstr", help="Verb/specifier string or 's' to set default package")
-    parser.add_argument("pkg", nargs="?", help="Package name (optional – can fall back to default)")
-    parser.add_argument("--dry-run", action="store_true", help="Print commands without executing")
-
-    args = parser.parse_args(argv)
-    verbstr: str = args.verbstr
-
-    # ------------------------------------------------------------------
-    # Handle the special 's' verb (set default package) early & return.
-    # ------------------------------------------------------------------
-    if verbstr == "s":
-        if not args.pkg:
-            parser.error("Package name is required with the 's' verb.")
-        _save_default_package(args.pkg)
-        print(f"Default package set to '{args.pkg}'.")
-        return 0
-
-    # ------------------------------------------------------------------
-    # Parse general verb strings
-    # ------------------------------------------------------------------
-    try:
-        parsed = _parse_verbs(verbstr)
-    except ParseError as exc:
-        parser.error(str(exc))
-
-    pkg_arg = args.pkg or _load_default_package()
-
-    # Verify that we have a package name if *any* command needs it.
-    if any(spec in ("o", "u") for _verb, spec in parsed) and not pkg_arg:
-        parser.error("This command requires a package name (none provided and no default set).")
-
-    # Build list of colcon commands to execute
-    try:
-        commands = _build_all_cmds(parsed, pkg_arg)
-    except ParseError as exc:
-        parser.error(str(exc))
-
-    # Execute (or echo) them sequentially
-    for cmd in commands:
-        if args.dry_run:
-            print("$", *cmd)
+    # execute each segment
+    for verb, spec in zip(primaries, specs):
+        if verb == "s":
+            # set default package
+            if not override_pkg:
+                error("'s' requires a package name")
+            save_default_pkg(override_pkg)
+            # do not run colcon for 's'
             continue
 
-        print("\n»", *cmd)
-        result = subprocess.run(cmd, check=False)
-        if result.returncode:
-            return result.returncode
+        # determine pkg if needed
+        need_pkg: bool = any(sp in ("o", "u") for sp in spec)
+        pkg: Optional[str] = get_pkg(override_pkg) if need_pkg else None
+        args: List[str] = []
+        # build argument list
+        if verb == "b":
+            args.append("build")
+        elif verb == "t":
+            args.append("test")
+        elif verb == "c":
+            args.extend(
+                [
+                    "clean",
+                    "workspace",
+                    "--yes",
+                    "--base-select",
+                    "build",
+                    "install",
+                    "log",
+                    "test_result",
+                ]
+            )
+        else:
+            error(f"unsupported verb '{verb}'")
 
-    return 0
+        if "o" in spec:
+            args.extend(["--packages-select", pkg])
+        elif "u" in spec:
+            args.extend(["--packages-up-to", pkg])
+        elif "a" in spec:
+            pass
+        else:
+            error(f"{verb} command requires a specifier (o, u, or a)")
+
+        run_colcon(args, extra_opts)
 
 
-if __name__ == "__main__":  # pragma: no cover – direct invocation
-    raise SystemExit(main())
+if __name__ == "__main__":
+    main()
