@@ -109,8 +109,7 @@ def error(msg: str) -> None:
 def get_pkg(override: Optional[str]) -> str:
     if override:
         return override
-    default = load_default_pkg()
-    if default:
+    if default := load_default_pkg():
         return default
     error("no package specified and no default set")
 
