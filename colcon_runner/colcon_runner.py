@@ -114,12 +114,11 @@ def _parse_verbs(cmds: str):
 
 def _build_colcon_cmd(verb, spec, pkg):
     if verb == "b":
-        args = ["colcon", "build"]
+        args = ["build"]
     elif verb == "t":
-        args = ["colcon", "test"]
+        args = ["test"]
     elif verb == "c":
         args = [
-            "colcon",
             "clean",
             "workspace",
             "--yes",
