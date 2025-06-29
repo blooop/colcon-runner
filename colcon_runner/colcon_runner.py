@@ -125,8 +125,14 @@ def run_colcon(args: List[str], extra_opts: List[str]) -> None:
 
 def main() -> None:
     if len(sys.argv) < 2:
+        # If no arguments, run 'colcon build'
+        run_colcon(["build"], [])
+        sys.exit(0)
+
+    # Add --help and -h support
+    if sys.argv[1] in ("--help", "-h"):
         print(__doc__)
-        sys.exit(1)
+        sys.exit(0)
 
     cmds: str = sys.argv[1]
     rest: List[str] = sys.argv[2:]
