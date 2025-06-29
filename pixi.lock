@@ -380,15 +380,15 @@ packages:
   requires_python: '>=3.8'
 - pypi: .
   name: colcon-runner
-  version: 0.2.2
-  sha256: dc283db1bfa66ff6fcef798b014b114111aad2e29b96abc2771b779370e966ad
+  version: 0.2.3
+  sha256: a9e36186dcfec46d1d0b94e2d94d273753d240172c9e2730e86af2f0ae3df1ac
   requires_dist:
-  - pylint>=3.2.5,<=3.3.6 ; extra == 'test'
+  - pylint>=3.2.5,<=3.3.7 ; extra == 'test'
   - pytest-cov>=4.1,<=6.1.1 ; extra == 'test'
   - pytest>=7.4,<=8.3.5 ; extra == 'test'
-  - hypothesis>=6.104.2,<=6.131.1 ; extra == 'test'
-  - ruff>=0.5.0,<=0.11.6 ; extra == 'test'
-  - coverage>=7.5.4,<=7.8.0 ; extra == 'test'
+  - hypothesis>=6.104.2,<=6.132.0 ; extra == 'test'
+  - ruff>=0.5.0,<=0.11.12 ; extra == 'test'
+  - coverage>=7.5.4,<=7.8.2 ; extra == 'test'
   - pre-commit<=4.2.0 ; extra == 'test'
   editable: true
 - pypi: https://files.pythonhosted.org/packages/10/e0/dc8355f992b6cc2f9dcd5ef6242b62a3f73264893bc09fbb08bfcab18eb4/coverage-7.8.0-cp312-cp312-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl
