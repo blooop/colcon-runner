@@ -207,9 +207,7 @@ def main() -> None:
             args.extend(["--packages-select", pkg])
         elif "u" in spec:
             args.extend(["--packages-up-to", pkg])
-        elif "a" in spec:
-            pass
-        else:
+        elif "a" not in spec:
             error(f"{verb} command requires a specifier (o, u, or a)")
 
         run_colcon(args, extra_opts)
