@@ -114,11 +114,12 @@ def _parse_verbs(cmds: str):
 
 def _build_colcon_cmd(verb, spec, pkg):
     if verb == "b":
-        args = ["build"]
+        args = ["colcon", "build"]
     elif verb == "t":
-        args = ["test"]
+        args = ["colcon", "test"]
     elif verb == "c":
         args = [
+            "colcon",
             "clean",
             "workspace",
             "--yes",
@@ -173,9 +174,15 @@ def get_pkg(override: Optional[str]) -> str:
 
 
 def run_colcon(args: List[str], extra_opts: List[str]) -> None:
-    cmd = ["colcon"] + args + extra_opts
-    print("+ " + " ".join(cmd))
-    ret = subprocess.call(cmd)
+    # Defensive: ensure all args are strings and not user-controlled shell input
+    import shlex
+
+    safe_args = [str(a) for a in args]
+    safe_extra_opts = [str(a) for a in extra_opts]
+    cmd = ["colcon"] + safe_args + safe_extra_opts
+    print("+ " + " ".join(shlex.quote(a) for a in cmd))
+    # Use subprocess.run with shell=False for safety
+    ret = subprocess.run(cmd, check=False).returncode
     if ret != 0:
         sys.exit(ret)
 
