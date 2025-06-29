@@ -10,41 +10,41 @@ import os
 from unittest import mock
 
 # Import the module under test
-from colcon_runner import cr
+from colcon_runner import colcon_runner
 
 
 class ParseVerbTests(unittest.TestCase):
     # pylint: disable=protected-access
     def test_valid_pairs(self):
-        self.assertEqual(cr._parse_verbs("ba"), [("b", "a")])
-        self.assertEqual(cr._parse_verbs("boto"), [("b", "o"), ("t", "o")])
+        self.assertEqual(colcon_runner._parse_verbs("ba"), [("b", "a")])
+        self.assertEqual(colcon_runner._parse_verbs("boto"), [("b", "o"), ("t", "o")])
 
     def test_invalid_length(self):
-        with self.assertRaises(cr.ParseError):
-            cr._parse_verbs("b")
+        with self.assertRaises(colcon_runner.ParseError):
+            colcon_runner._parse_verbs("b")
 
     def test_unknown_verb(self):
-        with self.assertRaises(cr.ParseError):
-            cr._parse_verbs("xa")
+        with self.assertRaises(colcon_runner.ParseError):
+            colcon_runner._parse_verbs("xa")
 
     def test_unknown_spec(self):
-        with self.assertRaises(cr.ParseError):
-            cr._parse_verbs("bz")
+        with self.assertRaises(colcon_runner.ParseError):
+            colcon_runner._parse_verbs("bz")
 
 
 class BuildCommandTests(unittest.TestCase):
     # pylint: disable=protected-access
     def test_build_all(self):
-        cmd = cr._build_colcon_cmd("b", "a", None)
+        cmd = colcon_runner._build_colcon_cmd("b", "a", None)
         self.assertEqual(cmd, ["colcon", "build"])
 
     def test_test_only(self):
-        cmd = cr._build_colcon_cmd("t", "o", "pkg")
+        cmd = colcon_runner._build_colcon_cmd("t", "o", "pkg")
         self.assertEqual(cmd, ["colcon", "test", "--packages-select", "pkg"])
 
     def test_missing_pkg(self):
-        with self.assertRaises(cr.ParseError):
-            cr._build_colcon_cmd("c", "u", None)
+        with self.assertRaises(colcon_runner.ParseError):
+            colcon_runner._build_colcon_cmd("c", "u", None)
 
 
 class IntegrationTests(unittest.TestCase):
@@ -60,21 +60,21 @@ class IntegrationTests(unittest.TestCase):
 
     def test_set_default_and_dry_run(self):
         # Patch subprocess.run so no real commands are executed.
-        with mock.patch.object(cr, "subprocess") as m_sp:
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
             m_sp.run.return_value.returncode = 0
 
             # Set default package
-            cr.main(["s", "demo_pkg"])
+            colcon_runner.main(["s", "demo_pkg"])
 
             # Use a public method or mock here if one exists, but for tests it's acceptable to
             # test internal functionality
             # pylint: disable=protected-access
-            self.assertEqual(cr._load_default_package(), "demo_pkg")
+            self.assertEqual(colcon_runner._load_default_package(), "demo_pkg")
 
             # Issue a compound command using the default + dry‑run
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
-                cr.main(["boto", "--dry-run"])
+                colcon_runner.main(["boto", "--dry-run"])
 
             output = buf.getvalue()
             self.assertIn("--packages-select demo_pkg", output)
