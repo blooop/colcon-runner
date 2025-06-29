@@ -69,7 +69,7 @@ class IntegrationTests(unittest.TestCase):
             # Use a public method or mock here if one exists, but for tests it's acceptable to
             # test internal functionality
             # pylint: disable=protected-access
-            self.assertEqual(colcon_runner._load_default_package(), "demo_pkg")
+            self.assertEqual(colcon_runner.load_default_pkg(), "demo_pkg")
 
             # Issue a compound command using the default + dry‑run
             buf = io.StringIO()

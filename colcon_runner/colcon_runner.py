@@ -88,6 +88,64 @@ from typing import Optional, List
 PKG_FILE: str = os.path.expanduser("~/.colcon_shortcuts_pkg")
 
 
+class ParseError(Exception):
+    pass
+
+
+def _parse_verbs(cmds: str):
+    """Parse a string like 'boto' into [(verb, spec), ...]."""
+    result = []
+    i = 0
+    while i < len(cmds):
+        if cmds[i] in ("s", "b", "t", "c"):
+            verb = cmds[i]
+            if verb == "s":
+                result.append((verb, None))
+                i += 1
+                continue
+            if i + 1 >= len(cmds) or cmds[i + 1] not in ("o", "u", "a"):
+                raise ParseError(f"verb '{verb}' must be followed by a specifier (o, u, or a)")
+            result.append((verb, cmds[i + 1]))
+            i += 2
+        else:
+            raise ParseError(f"unknown command letter '{cmds[i]}'")
+    return result
+
+
+def _build_colcon_cmd(verb, spec, pkg):
+    if verb == "b":
+        args = ["colcon", "build"]
+    elif verb == "t":
+        args = ["colcon", "test"]
+    elif verb == "c":
+        args = [
+            "colcon",
+            "clean",
+            "workspace",
+            "--yes",
+            "--base-select",
+            "build",
+            "install",
+            "log",
+            "test_result",
+        ]
+    else:
+        raise ParseError(f"unsupported verb '{verb}'")
+    if spec == "o":
+        if not pkg:
+            raise ParseError(f"{verb} 'only' requires a package name")
+        args.extend(["--packages-select", pkg])
+    elif spec == "u":
+        if not pkg:
+            raise ParseError(f"{verb} 'upto' requires a package name")
+        args.extend(["--packages-up-to", pkg])
+    elif spec == "a":
+        pass
+    else:
+        raise ParseError(f"unknown specifier '{spec}'")
+    return args
+
+
 def load_default_pkg() -> Optional[str]:
     if os.path.isfile(PKG_FILE):
         with open(PKG_FILE, "r", encoding="utf-8") as f:
@@ -112,6 +170,7 @@ def get_pkg(override: Optional[str]) -> str:
     if default := load_default_pkg():
         return default
     error("no package specified and no default set")
+    return None
 
 
 def run_colcon(args: List[str], extra_opts: List[str]) -> None:
@@ -122,8 +181,10 @@ def run_colcon(args: List[str], extra_opts: List[str]) -> None:
         sys.exit(ret)
 
 
-def main() -> None:
-    if len(sys.argv) < 2:
+def main(argv=None) -> None:
+    if argv is None:
+        argv = sys.argv[1:]
+    if len(argv) < 1:
         print(
             "No arguments provided. Running 'colcon build' by default.\nUse '--help' for more options."
         )
@@ -131,12 +192,12 @@ def main() -> None:
         sys.exit(0)
 
     # Add --help and -h support
-    if sys.argv[1] in ("--help", "-h"):
+    if argv[0] in ("--help", "-h"):
         print(__doc__)
         sys.exit(0)
 
-    cmds: str = sys.argv[1]
-    rest: List[str] = sys.argv[2:]
+    cmds: str = argv[0]
+    rest: List[str] = argv[1:]
 
     # extract override pkg (first non-dash arg)
     override_pkg: Optional[str] = None
@@ -147,31 +208,10 @@ def main() -> None:
         else:
             extra_opts.append(arg)
 
-    # parse cmds into segments of (verb, specifiers)
-    primaries: List[str] = []
-    specs: List[List[str]] = []
-    i: int = 0
-    while i < len(cmds):
-        if cmds[i] in ("s", "b", "t", "c"):
-            primaries.append(cmds[i])
-
-            # For "s" command, specifier is not required
-            if cmds[i] == "s":
-                specs.append([])
-                i += 1
-                continue
-
-            # For other commands, require a specifier
-            if i + 1 >= len(cmds) or cmds[i + 1] not in ("o", "u", "a"):
-                error(f"verb '{cmds[i]}' must be followed by a specifier (o, u, or a)")
-
-            specs.append([cmds[i + 1]])
-            i += 2
-        else:
-            error(f"unknown command letter '{cmds[i]}'")
+    parsed_verbs = _parse_verbs(cmds)
 
     # execute each segment
-    for verb, spec in zip(primaries, specs):
+    for verb, spec in parsed_verbs:
         if verb == "s":
             # set default package
             if not override_pkg:
@@ -181,36 +221,14 @@ def main() -> None:
             continue
 
         # determine pkg if needed
-        need_pkg: bool = any(sp in ("o", "u") for sp in spec)
+        need_pkg: bool = spec in ("o", "u")
         pkg: Optional[str] = get_pkg(override_pkg) if need_pkg else None
-        args: List[str] = []
-        # build argument list
-        if verb == "b":
-            args.append("build")
-        elif verb == "t":
-            args.append("test")
-        elif verb == "c":
-            args.extend(
-                [
-                    "clean",
-                    "workspace",
-                    "--yes",
-                    "--base-select",
-                    "build",
-                    "install",
-                    "log",
-                    "test_result",
-                ]
-            )
-        else:
-            error(f"unsupported verb '{verb}'")
+        args: List[str] = _build_colcon_cmd(verb, spec, pkg)
 
-        if "o" in spec:
-            args.extend(["--packages-select", pkg])
-        elif "u" in spec:
-            args.extend(["--packages-up-to", pkg])
-        elif "a" not in spec:
-            error(f"{verb} command requires a specifier (o, u, or a)")
+        # Support --dry-run for tests
+        if "--dry-run" in extra_opts:
+            print("+ " + " ".join(args + extra_opts))
+            continue
 
         run_colcon(args, extra_opts)
 
