@@ -36,11 +36,11 @@ class BuildCommandTests(unittest.TestCase):
     # pylint: disable=protected-access
     def test_build_all(self):
         cmd = colcon_runner._build_colcon_cmd("b", "a", None)
-        self.assertEqual(cmd, ["colcon", "build"])
+        self.assertEqual(cmd, ["build"])
 
     def test_test_only(self):
         cmd = colcon_runner._build_colcon_cmd("t", "o", "pkg")
-        self.assertEqual(cmd, ["colcon", "test", "--packages-select", "pkg"])
+        self.assertEqual(cmd, ["test", "--packages-select", "pkg"])
 
     def test_missing_pkg(self):
         with self.assertRaises(colcon_runner.ParseError):
