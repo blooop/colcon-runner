@@ -11,6 +11,8 @@
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/downloads/)
 [![Pixi Badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json)](https://pixi.sh)
 
+Colcon runner is a minimal CLI wrapper for [colcon](https://colcon.readthedocs.io/en/released/) that provides concise and flexible commands for common build, test, and clean tasks in ROS workspaces. It supports [colcon defaults](https://colcon.readthedocs.io/en/released/user/configuration.html#colcon-defaults-yaml) for consistent configuration.
+
 ```
 CR(1)                         User Commands                        CR(1)
 
