@@ -125,7 +125,7 @@ def run_colcon(args: List[str], extra_opts: List[str]) -> None:
 
 def main() -> None:
     if len(sys.argv) < 2:
-        # If no arguments, run 'colcon build'
+        print("No arguments provided. Running 'colcon build' by default.\nUse '--help' for more options.")
         run_colcon(["build"], [])
         sys.exit(0)
 
