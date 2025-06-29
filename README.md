@@ -46,7 +46,7 @@ VERBS
     t       Test packages.
     c       clean packages.
 
-SPECIFIER   
+SPECIFIER
     o       only (--packages-select)
     u       upto (--packages-up-to)
     a       all
@@ -78,7 +78,7 @@ USAGE EXAMPLES
         Test upto 'pkg_1' and its dependencies.
 
     cr ca
-        Clean all (build/, install/, and log/ directories)
+        Clean workspace (build/, install/, log/, and test_result/ directories)
 
     cr co pkg_1
         Clean only 'pkg_1'.
@@ -96,7 +96,7 @@ USAGE EXAMPLES
     cr boto
         build only 'pkg1' package, then test only 'pkg1'.
 
-    cr cabuto 
+    cr cabuto
         Clean all, build up to 'pkg1', and test only 'pkg1'.
 
 
@@ -107,4 +107,39 @@ NOTES
 
 SEE ALSO
     colcon(1), colcon-clean(1)
+```
+
+Colcon runner assumes you have colcon defaults set up to ensure your paths and settings are applied when you run colcon.  This is an example of a colcon defaults file to get consistent behavior across the commands supported here:
+
+```yaml
+{
+  "build": {
+    "symlink-install": true,
+    "base-paths": ["/home/ros_ws/src"],
+    "build-base": "/home/ros_ws/ros_build/build",
+    "install-base": "/home/ros_ws/ros_build/install",
+    "cmake-args": [
+      "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
+      "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+    ]
+  },
+  "test": {
+    "build-base": "/home/ros_ws/ros_build/build",
+    "install-base": "/home/ros_ws/ros_build/install",
+    "log-base": "/home/ros_ws/ros_build/logs",
+    "event-handlers": ["console_direct+"]
+  },
+  "test-result": {
+    "test-result-base": "/home/ros_ws/ros_build/build"
+  },
+  "clean.workspace": {
+    "yes": true,
+    "base-select": ["build", "install", "log", "test_result"],
+    "build-base": "/home/ros_ws/ros_build/build",
+    "install-base": "/home/ros_ws/ros_build/install",
+    "log-base": "/home/ros_ws/ros_build/logs",
+    "test-result-base": "/home/ros_ws/ros_build/build"
+  },
+  "": {"log-base": "/home/ros_ws/ros_build/logs"}
+}
 ```

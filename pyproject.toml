@@ -1,6 +1,6 @@
 [project]
 name = "colcon_runner"
-version = "0.2.0"
+version = "0.2.2"
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A python package template"
 readme = "README.md"
@@ -13,7 +13,7 @@ Source = "https://github.com/blooop/colcon_runner"
 Home = "https://github.com/blooop/colcon_runner"
 
 [project.scripts]
-cr = "colcon_runner.cr:main"
+cr = "colcon_runner.colcon_runner:main"
 
 [tool.pixi.project]
 channels = ["conda-forge"]
