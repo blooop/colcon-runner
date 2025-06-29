@@ -13,6 +13,14 @@
 
 Colcon runner is a minimal CLI wrapper for [colcon](https://colcon.readthedocs.io/en/released/) that provides concise and flexible commands for common build, test, and clean tasks in ROS workspaces. It supports [colcon defaults](https://colcon.readthedocs.io/en/released/user/configuration.html#colcon-defaults-yaml) for consistent configuration.
 
+## Installation
+
+You can install colcon-runner using pip:
+
+```bash
+pip install colcon-runner
+```
+
 ```
 CR(1)                         User Commands                        CR(1)
 
