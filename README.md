@@ -46,7 +46,7 @@ VERBS
     t       Test packages.
     c       clean packages.
 
-SPECIFIER   
+SPECIFIER
     o       only (--packages-select)
     u       upto (--packages-up-to)
     a       all
@@ -78,7 +78,7 @@ USAGE EXAMPLES
         Test upto 'pkg_1' and its dependencies.
 
     cr ca
-        Clean all (build/, install/, and log/ directories)
+        Clean workspace (build/, install/, log/, and test_result/ directories)
 
     cr co pkg_1
         Clean only 'pkg_1'.
@@ -96,7 +96,7 @@ USAGE EXAMPLES
     cr boto
         build only 'pkg1' package, then test only 'pkg1'.
 
-    cr cabuto 
+    cr cabuto
         Clean all, build up to 'pkg1', and test only 'pkg1'.
 
 
