@@ -1,0 +1,204 @@
+{
+    "git.enableSmartCommit": true,
+    "[cpp]": {
+        "editor.defaultFormatter": "ms-vscode.cpptools"
+    },
+    "editor.wordWrap": "on",
+    "files.autoSave": "onFocusChange",
+    "git.autofetch": true,
+    "editor.minimap.enabled": false,
+    "editor.renderWhitespace": "none",
+    "breadcrumbs.enabled": true,
+    "git.confirmSync": false,
+    "extensions.ignoreRecommendations": false,
+    "editor.suggestSelection": "first",
+    "python.languageServer": "Pylance",
+    "explorer.confirmDragAndDrop": false,
+    "explorer.confirmDelete": false,
+    "diffEditor.ignoreTrimWhitespace": false,
+    "workbench.panel.defaultLocation": "right",
+    "settingsSync.ignoredSettings": [],
+    "[c]": {
+        "editor.defaultFormatter": "xaver.clang-format"
+    },
+    "git.autoStash": true,
+    "git.detectSubmodulesLimit": 100,
+    "workbench.editor.highlightModifiedTabs": true,
+    "editor.tokenColorCustomizations": {
+        "variables": "#00e0e7",
+        "comments": "#72da53"
+    },
+    "workbench.colorCustomizations": {
+        "editorLineNumber.foreground": "#d3d3d3",
+        "sideBar.foreground": "#ffffff"
+    },
+    "workbench.editor.decorations.badges": false,
+    "files.watcherExclude": {
+        "**/build/**": true,
+        "**/install/**": true,
+        "**/node_modules/**": true,
+        "build/**": true
+    },
+    "search.exclude": {
+        ".pixi/**": true,
+        "**/build/**": true,
+        "**/install/**": true
+    },
+    "task.problemMatchers.neverPrompt": {
+        "shell": true
+    },
+    "task.allowAutomaticTasks": "on",
+    "remote.autoForwardPortsSource": "hybrid",
+    "security.workspace.trust.untrustedFiles": "open",
+    "git.repositoryScanMaxDepth": -1,
+    "debug.onTaskErrors": "showErrors",
+    "C_Cpp.default.cppStandard": "c++20",
+    "C_Cpp.default.cStandard": "c17",
+    "cmake.pinnedCommands": [
+        "workbench.action.tasks.configureTaskRunner",
+        "workbench.action.tasks.runTask"
+    ],
+    "vim.smartRelativeLine": true,
+    "vim.handleKeys": {
+        "<C-p>": false,
+        "<C-d>": true,
+        "<C-s>": false,
+        "<C-z>": false,
+        "<C-l>": false,
+        "<C-i>": false,
+        "<C-h>": false
+    },
+    "git.openRepositoryInParentFolders": "always",
+    "editor.autoClosingBrackets": "never",
+    "git.autoRepositoryDetection": "subFolders",
+    "editor.autoSurround": "never",
+    "editor.autoClosingQuotes": "never",
+    "terminal.integrated.scrollback": 1000000,
+    "terminal.integrated.tabs.location": "left",
+    "githubPullRequests.pullBranch": "never",
+    "git.branchProtection": [
+        "master",
+        "main"
+    ],
+    "workbench.editorAssociations": {
+        "*.stl": "3dviewer.editor",
+        "*.dae": "3dviewer.editor"
+    },
+    "3dpreview.showWireframe": true,
+    "search.useIgnoreFiles": false,
+    "continue.enableTabAutocomplete": false,
+    "git.rebaseWhenSync": false,
+    "cmake.showOptionsMovedNotification": false,
+    "ruff.configuration": "ruff.toml",
+    "[toml]": {
+        "editor.defaultFormatter": "tamasfe.even-better-toml"
+    },
+    "workbench.settings.applyToAllProfiles": [
+        "editor.formatOnType",
+        "chat.tools.autoApprove"
+    ],
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff"
+    },
+    "ros2-topic-viewer.panelLimitSetting": false,
+    "jupyter.widgetScriptSources": [
+        "jsdelivr.com",
+        "unpkg.com"
+    ],
+    "github.copilot.enable": {
+        "*": true,
+        "plaintext": false,
+        "markdown": false,
+        "scminput": false
+    },
+    "chat.editing.alwaysSaveWithGeneratedChanges": true,
+    "code-runner.executorMap": {
+        "javascript": "node",
+        "java": "cd $dir && javac $fileName && java $fileNameWithoutExt",
+        "c": "cd $dir && gcc $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+        "cpp": "cd $dir && g++ $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+        "objective-c": "cd $dir && gcc -framework Cocoa $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+        "php": "php",
+        "python": "pixi run python",
+        "perl": "perl",
+        "perl6": "perl6",
+        "ruby": "ruby",
+        "go": "go run",
+        "lua": "lua",
+        "groovy": "groovy",
+        "powershell": "powershell -ExecutionPolicy ByPass -File",
+        "bat": "cmd /c",
+        "shellscript": "bash",
+        "fsharp": "fsi",
+        "csharp": "scriptcs",
+        "vbscript": "cscript //Nologo",
+        "typescript": "ts-node",
+        "coffeescript": "coffee",
+        "scala": "scala",
+        "swift": "swift",
+        "julia": "julia",
+        "crystal": "crystal",
+        "ocaml": "ocaml",
+        "r": "Rscript",
+        "applescript": "osascript",
+        "clojure": "lein exec",
+        "haxe": "haxe --cwd $dirWithoutTrailingSlash --run $fileNameWithoutExt",
+        "rust": "cd $dir && rustc $fileName && $dir$fileNameWithoutExt",
+        "racket": "racket",
+        "scheme": "csi -script",
+        "ahk": "autohotkey",
+        "autoit": "autoit3",
+        "dart": "dart",
+        "pascal": "cd $dir && fpc $fileName && $dir$fileNameWithoutExt",
+        "d": "cd $dir && dmd $fileName && $dir$fileNameWithoutExt",
+        "haskell": "runhaskell",
+        "nim": "nim compile --verbosity:0 --hints:off --run",
+        "lisp": "sbcl --script",
+        "kit": "kitc --run",
+        "v": "v run",
+        "sass": "sass --style expanded",
+        "scss": "scss --style expanded",
+        "less": "cd $dir && lessc $fileName $fileNameWithoutExt.css",
+        "FortranFreeForm": "cd $dir && gfortran $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+        "fortran-modern": "cd $dir && gfortran $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+        "fortran_fixed-form": "cd $dir && gfortran $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+        "fortran": "cd $dir && gfortran $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt"
+    },
+    "window.titleBarStyle": "native",
+    "workbench.experimental.share.enabled": true,
+    "chat.agent.maxRequests": 1000000,
+    "github.copilot.chat.agent.thinkingTool": true,
+    "github.copilot.chat.codesearch.enabled": true,
+    "chat.agent.enabled": true,
+    "chat.tools.autoApprove": true,
+    "csharp.debug.symbolOptions.searchMicrosoftSymbolServer": true,
+    "github.copilot.chat.codeGeneration.instructions": [
+        
+    ],
+    "mcp": {
+        "servers": {
+            "context7": {
+                "type": "stdio",
+                "command": "npx",
+                "args": [
+                    "-y",
+                    "@upstash/context7-mcp"
+                ]
+            },
+            "tree_sitter": {
+                "command": "uv",
+                "args": [
+                    "tool",
+                    "run",
+                    "mcp-server-tree-sitter"
+                ]
+            },
+            "github": {
+                "type": "http",
+                "url": "https://api.githubcopilot.com/mcp/"
+            }
+        },
+        "inputs": []
+    },
+    "terminal.integrated.tabs.enabled": false
+}
