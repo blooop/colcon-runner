@@ -1,9 +1,9 @@
 Intro
 =====
 
-A template repo for python projects
+Colcon Runner is a concise CLI wrapper for colcon build/test/clean workflows in ROS workspaces. It provides streamlined commands and supports colcon defaults for consistent configuration.
 
-This has basic setup for
+This project includes setup for:
 
 * pylint
 * ruff
@@ -12,7 +12,7 @@ This has basic setup for
 * codecov
 * git-lfs
 * basic github actions ci
-* pulling updates from this template
+* pulling updates from the upstream repository
 
 
 ## Continuous Integration Status
