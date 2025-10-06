@@ -115,10 +115,48 @@ NOTES
     - The 's' verb sets a default package name stored in a configuration file.
     - Subsequent commands that require a package argument will use the default if none is provided.
     - Compound verbs can be chained together for streamlined operations.
+    - Underlay path can be set in colcon-defaults.yaml with 'colcon-runner-underlay: "/path"' or via --underlay flag.
+    - When 'u' is the first verb, it operates on the underlay. When 'u' follows a verb (bu, tu, cu), it means 'upto'.
 
 SEE ALSO
     colcon(1), colcon-clean(1)
 ```
+
+## ROS Underlay Support
+
+Colcon runner supports building and testing ROS underlay workspaces. You can use the `u` verb as the first command to operate on an underlay workspace:
+
+```bash
+# Build all packages in the underlay
+cr u b
+
+# Build only a specific package in the underlay
+cr u bo my_package
+
+# Build and test the underlay
+cr u bt
+```
+
+The underlay path can be specified in two ways:
+
+1. **Via command-line flag:**
+   ```bash
+   cr u b --underlay /path/to/underlay
+   ```
+
+2. **Via colcon-defaults.yaml:**
+   Add the following to your `colcon-defaults.yaml`:
+   ```yaml
+   colcon-runner-underlay: "/path/to/underlay"
+   ```
+
+When the `u` verb is used as the first command, colcon-runner will change to the underlay directory before executing colcon commands.
+
+**Note:** The `u` character serves dual purposes:
+- As the **first verb** (`cr u b`): operates on the underlay workspace
+- As a **specifier** after a verb (`cr bu pkg`): means "upto" (build up to and including the specified package)
+
+## Colcon Defaults Configuration
 
 Colcon runner assumes you have colcon defaults set up to ensure your paths and settings are applied when you run colcon.  This is an example of a colcon defaults file to get consistent behavior across the commands supported here:
 

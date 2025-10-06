@@ -16,14 +16,14 @@ from colcon_runner import colcon_runner
 class ParseVerbTests(unittest.TestCase):
     # pylint: disable=protected-access
     def test_valid_pairs(self):
-        self.assertEqual(colcon_runner._parse_verbs("ba"), [("b", "a")])
-        self.assertEqual(colcon_runner._parse_verbs("boto"), [("b", "o"), ("t", "o")])
+        self.assertEqual(colcon_runner._parse_verbs("ba"), (False, [("b", "a")]))
+        self.assertEqual(colcon_runner._parse_verbs("boto"), (False, [("b", "o"), ("t", "o")]))
 
     def test_default_specifier(self):
         # When no specifier is provided, default to "a" (all)
-        self.assertEqual(colcon_runner._parse_verbs("b"), [("b", "a")])
-        self.assertEqual(colcon_runner._parse_verbs("t"), [("t", "a")])
-        self.assertEqual(colcon_runner._parse_verbs("c"), [("c", "a")])
+        self.assertEqual(colcon_runner._parse_verbs("b"), (False, [("b", "a")]))
+        self.assertEqual(colcon_runner._parse_verbs("t"), (False, [("t", "a")]))
+        self.assertEqual(colcon_runner._parse_verbs("c"), (False, [("c", "a")]))
 
     def test_unknown_verb(self):
         with self.assertRaises(colcon_runner.ParseError):
@@ -37,10 +37,24 @@ class ParseVerbTests(unittest.TestCase):
 
     def test_default_in_compound_commands(self):
         # Test default specifier in compound commands
-        self.assertEqual(colcon_runner._parse_verbs("bt"), [("b", "a"), ("t", "a")])
-        self.assertEqual(colcon_runner._parse_verbs("bto"), [("b", "a"), ("t", "o")])
-        self.assertEqual(colcon_runner._parse_verbs("bobt"), [("b", "o"), ("b", "a"), ("t", "a")])
-        self.assertEqual(colcon_runner._parse_verbs("cbt"), [("c", "a"), ("b", "a"), ("t", "a")])
+        self.assertEqual(colcon_runner._parse_verbs("bt"), (False, [("b", "a"), ("t", "a")]))
+        self.assertEqual(colcon_runner._parse_verbs("bto"), (False, [("b", "a"), ("t", "o")]))
+        self.assertEqual(colcon_runner._parse_verbs("bobt"), (False, [("b", "o"), ("b", "a"), ("t", "a")]))
+        self.assertEqual(colcon_runner._parse_verbs("cbt"), (False, [("c", "a"), ("b", "a"), ("t", "a")]))
+
+    def test_underlay_verb(self):
+        # Test underlay verb when 'u' is first
+        self.assertEqual(colcon_runner._parse_verbs("u"), (True, []))
+        self.assertEqual(colcon_runner._parse_verbs("ub"), (True, [("b", "a")]))
+        self.assertEqual(colcon_runner._parse_verbs("uba"), (True, [("b", "a")]))
+        self.assertEqual(colcon_runner._parse_verbs("ubo"), (True, [("b", "o")]))
+        self.assertEqual(colcon_runner._parse_verbs("ubt"), (True, [("b", "a"), ("t", "a")]))
+
+    def test_upto_specifier(self):
+        # Test that 'u' after a verb is still treated as "upto" specifier
+        self.assertEqual(colcon_runner._parse_verbs("bu"), (False, [("b", "u")]))
+        self.assertEqual(colcon_runner._parse_verbs("tu"), (False, [("t", "u")]))
+        self.assertEqual(colcon_runner._parse_verbs("cu"), (False, [("c", "u")]))
 
 
 class BuildCommandTests(unittest.TestCase):
