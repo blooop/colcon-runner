@@ -19,17 +19,28 @@ class ParseVerbTests(unittest.TestCase):
         self.assertEqual(colcon_runner._parse_verbs("ba"), [("b", "a")])
         self.assertEqual(colcon_runner._parse_verbs("boto"), [("b", "o"), ("t", "o")])
 
-    def test_invalid_length(self):
-        with self.assertRaises(colcon_runner.ParseError):
-            colcon_runner._parse_verbs("b")
+    def test_default_specifier(self):
+        # When no specifier is provided, default to "a" (all)
+        self.assertEqual(colcon_runner._parse_verbs("b"), [("b", "a")])
+        self.assertEqual(colcon_runner._parse_verbs("t"), [("t", "a")])
+        self.assertEqual(colcon_runner._parse_verbs("c"), [("c", "a")])
 
     def test_unknown_verb(self):
         with self.assertRaises(colcon_runner.ParseError):
             colcon_runner._parse_verbs("xa")
 
-    def test_unknown_spec(self):
-        with self.assertRaises(colcon_runner.ParseError):
+    def test_unknown_spec_defaults_then_fails_on_unknown_verb(self):
+        # "bz" parses "b" with default "a", then fails on unknown verb "z"
+        with self.assertRaises(colcon_runner.ParseError) as cm:
             colcon_runner._parse_verbs("bz")
+        self.assertIn("unknown command letter 'z'", str(cm.exception))
+
+    def test_default_in_compound_commands(self):
+        # Test default specifier in compound commands
+        self.assertEqual(colcon_runner._parse_verbs("bt"), [("b", "a"), ("t", "a")])
+        self.assertEqual(colcon_runner._parse_verbs("bto"), [("b", "a"), ("t", "o")])
+        self.assertEqual(colcon_runner._parse_verbs("bobt"), [("b", "o"), ("b", "a"), ("t", "a")])
+        self.assertEqual(colcon_runner._parse_verbs("cbt"), [("c", "a"), ("b", "a"), ("t", "a")])
 
 
 class BuildCommandTests(unittest.TestCase):

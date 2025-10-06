@@ -23,13 +23,16 @@ VERBS
 SPECIFIER
     o       only (--packages-select)
     u       upto (--packages-up-to)
-    a       all
+    a       all (default if omitted)
 
-Each verb must have a specifier after it, and you can chain as many verb-specifier pairs as you want.  You can set a default package to use, for all subsequent commands, or you can specify a package in the command itself.
+If no specifier is provided after a verb, it defaults to "a" (all). You can chain as many verb-specifier pairs as you want. You can set a default package to use for all subsequent commands, or you can specify a package in the command itself.
 
 USAGE EXAMPLES
 
   Basic Commands:
+    cr b
+        Build all packages. (shorthand, specifier defaults to "a")
+
     cr ba
         Build all packages. (explicit)
 
@@ -39,14 +42,20 @@ USAGE EXAMPLES
     cr bu pkg_1
         Build upto 'pkg_1' and its dependencies.
 
+    cr t
+        Test all packages. (shorthand)
+
     cr ta
-        Test all packages.
+        Test all packages. (explicit)
 
     cr to pkg_1
         Test only 'pkg_1'.
 
     cr tu pkg_1
         Test upto 'pkg_1' and its dependencies.
+
+    cr c
+        Clean workspace. (shorthand)
 
     cr ca
         Clean workspace (build/, install/, log/, and test_result/ directories)
@@ -60,6 +69,12 @@ USAGE EXAMPLES
   Compound Commands:
     cr s pkg1
         Set 'pkg_1' as the default package for subsequent commands.
+
+    cr bt
+        Build all and test all. (shorthand)
+
+    cr cbt
+        Clean all, build all, and test all. (shorthand)
 
     cr cabu
         Clean all and build up to 'pkg1'.
@@ -103,10 +118,13 @@ def _parse_verbs(cmds: str):
                 result.append((verb, None))
                 i += 1
                 continue
+            # If no specifier provided or invalid specifier, default to "a"
             if i + 1 >= len(cmds) or cmds[i + 1] not in ("o", "u", "a"):
-                raise ParseError(f"verb '{verb}' must be followed by a specifier (o, u, or a)")
-            result.append((verb, cmds[i + 1]))
-            i += 2
+                result.append((verb, "a"))
+                i += 1
+            else:
+                result.append((verb, cmds[i + 1]))
+                i += 2
         else:
             raise ParseError(f"unknown command letter '{cmds[i]}'")
     return result
