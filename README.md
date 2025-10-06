@@ -45,15 +45,18 @@ VERBS
 SPECIFIER
     o       only (--packages-select)
     u       upto (--packages-up-to)
-    a       all
+    a       all (default if omitted)
 
-Each verb must have a specifier after it, and you can chain as many verb-specifier pairs as you want.  You can set a default package to use, for all subsequent commands, or you can specify a package in the command itself.
+If no specifier is provided after a verb, it defaults to "a" (all). You can chain as many verb-specifier pairs as you want. You can set a default package to use for all subsequent commands, or you can specify a package in the command itself.
 
 USAGE EXAMPLES
 
   Basic Commands:
-    cr 
-        Build all packages. (default action)
+    cr
+        Build all packages. (default action when no arguments provided)
+
+    cr b
+        Build all packages. (shorthand, specifier defaults to "a")
 
     cr ba
         Build all packages. (explicit)
@@ -64,14 +67,20 @@ USAGE EXAMPLES
     cr bu pkg_1
         Build upto 'pkg_1' and its dependencies.
 
+    cr t
+        Test all packages. (shorthand)
+
     cr ta
-        Test all packages.
+        Test all packages. (explicit)
 
     cr to pkg_1
         Test only 'pkg_1'.
 
     cr tu pkg_1
         Test upto 'pkg_1' and its dependencies.
+
+    cr c
+        Clean workspace. (shorthand)
 
     cr ca
         Clean workspace (build/, install/, log/, and test_result/ directories)
@@ -85,6 +94,12 @@ USAGE EXAMPLES
   Compound Commands:
     cr s pkg1
         Set 'pkg_1' as the default package for subsequent commands.
+
+    cr bt
+        Build all and test all. (shorthand)
+
+    cr cbt
+        Clean all, build all, and test all. (shorthand)
 
     cr cabu
         Clean all and build up to 'pkg1'.
