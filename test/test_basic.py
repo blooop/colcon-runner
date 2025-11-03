@@ -42,14 +42,16 @@ class ParseVerbTests(unittest.TestCase):
         self.assertEqual(colcon_runner._parse_verbs("bobt"), [("b", "o"), ("b", "a"), ("t", "a")])
         self.assertEqual(colcon_runner._parse_verbs("cbt"), [("c", "a"), ("b", "a"), ("t", "a")])
 
-    def test_update_verb(self):
-        # 'u' verb doesn't take a specifier (like 's')
-        self.assertEqual(colcon_runner._parse_verbs("u"), [("u", None)])
-        # 'u' can be combined with other verbs
-        self.assertEqual(colcon_runner._parse_verbs("ub"), [("u", None), ("b", "a")])
-        self.assertEqual(colcon_runner._parse_verbs("ubt"), [("u", None), ("b", "a"), ("t", "a")])
-        # 'bu' should parse as build upto (specifier), not build + update
-        self.assertEqual(colcon_runner._parse_verbs("bu"), [("b", "u")])
+    def test_install_verb(self):
+        # 'i' verb takes specifiers like 'b', 't', 'c'
+        self.assertEqual(colcon_runner._parse_verbs("i"), [("i", "a")])
+        self.assertEqual(colcon_runner._parse_verbs("ia"), [("i", "a")])
+        self.assertEqual(colcon_runner._parse_verbs("io"), [("i", "o")])
+        self.assertEqual(colcon_runner._parse_verbs("iu"), [("i", "u")])
+        # 'i' can be combined with other verbs
+        self.assertEqual(colcon_runner._parse_verbs("ib"), [("i", "a"), ("b", "a")])
+        self.assertEqual(colcon_runner._parse_verbs("iobo"), [("i", "o"), ("b", "o")])
+        self.assertEqual(colcon_runner._parse_verbs("ibt"), [("i", "a"), ("b", "a"), ("t", "a")])
 
 
 class BuildCommandTests(unittest.TestCase):
@@ -65,6 +67,29 @@ class BuildCommandTests(unittest.TestCase):
     def test_missing_pkg(self):
         with self.assertRaises(colcon_runner.ParseError):
             colcon_runner._build_colcon_cmd("c", "u", None)
+
+
+class RosdepCommandTests(unittest.TestCase):
+    # pylint: disable=protected-access
+    def test_install_all(self):
+        cmd = colcon_runner._build_rosdep_cmd("a", None)
+        self.assertEqual(cmd, ["install", "--from-paths", "src", "--ignore-src", "-y", "--recursive"])
+
+    def test_install_only(self):
+        cmd = colcon_runner._build_rosdep_cmd("o", "pkg")
+        self.assertEqual(cmd, ["install", "--from-paths", "src/pkg", "--ignore-src", "-y"])
+
+    def test_install_upto(self):
+        cmd = colcon_runner._build_rosdep_cmd("u", "pkg")
+        self.assertEqual(cmd, ["install", "--from-paths", "src/pkg", "--ignore-src", "-y", "--recursive"])
+
+    def test_missing_pkg_only(self):
+        with self.assertRaises(colcon_runner.ParseError):
+            colcon_runner._build_rosdep_cmd("o", None)
+
+    def test_missing_pkg_upto(self):
+        with self.assertRaises(colcon_runner.ParseError):
+            colcon_runner._build_rosdep_cmd("u", None)
 
 
 class IntegrationTests(unittest.TestCase):
@@ -101,17 +126,27 @@ class IntegrationTests(unittest.TestCase):
             # subprocess.run should *not* be called when --dry-run is active
             m_sp.run.assert_not_called()
 
-    def test_update_verb_dry_run(self):
-        # Test that 'u' verb generates correct rosdep command
+    def test_install_verb_dry_run(self):
+        # Test that 'i' verb generates correct rosdep command
         with mock.patch.object(colcon_runner, "subprocess") as m_sp:
             m_sp.run.return_value.returncode = 0
 
+            # Test install all
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
-                colcon_runner.main(["u", "--dry-run"])
+                colcon_runner.main(["ia", "--dry-run"])
 
             output = buf.getvalue()
-            self.assertIn("rosdep install --from-paths src --ignore-src -y", output)
+            self.assertIn("rosdep install --from-paths src --ignore-src -y --recursive", output)
+
+            # Test install only with package
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["io", "test_pkg", "--dry-run"])
+
+            output = buf.getvalue()
+            self.assertIn("rosdep install --from-paths src/test_pkg --ignore-src -y", output)
+
             # subprocess.run should *not* be called when --dry-run is active
             m_sp.run.assert_not_called()
 

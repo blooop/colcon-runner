@@ -19,7 +19,7 @@ VERBS
     b       build packages.
     t       Test packages.
     c       clean packages.
-    u       update dependencies using rosdep.
+    i       install dependencies using rosdep.
 
 SPECIFIER
     o       only (--packages-select)
@@ -67,8 +67,17 @@ USAGE EXAMPLES
     cr cu pkg_1
         Clean upto 'pkg_1'.
 
-    cr u
-        Update dependencies by running rosdep install on the workspace.
+    cr i
+        Install all dependencies using rosdep. (shorthand)
+
+    cr ia
+        Install all dependencies using rosdep. (explicit)
+
+    cr io pkg_1
+        Install dependencies only for 'pkg_1'.
+
+    cr iu pkg_1
+        Install dependencies for 'pkg_1' and its dependencies.
 
   Compound Commands:
     cr s pkg1
@@ -80,8 +89,11 @@ USAGE EXAMPLES
     cr cbt
         Clean all, build all, and test all. (shorthand)
 
-    cr ub
-        Update dependencies and build all.
+    cr ib
+        Install all dependencies and build all.
+
+    cr iobo
+        Install dependencies for 'pkg1' only, then build only 'pkg1'.
 
     cr cabu
         Clean all and build up to 'pkg1'.
@@ -95,7 +107,7 @@ USAGE EXAMPLES
 
 NOTES
     - The 's' verb sets a default package name stored in a configuration file.
-    - The 'u' verb runs rosdep install on the entire workspace and does not take a specifier.
+    - The 'i' verb runs rosdep install and supports the same specifiers as other verbs.
     - Subsequent commands that require a package argument will use the default if none is provided.
     - Compound verbs can be chained together for streamlined operations.
 
@@ -120,9 +132,9 @@ def _parse_verbs(cmds: str):
     result = []
     i = 0
     while i < len(cmds):
-        if cmds[i] in ("s", "b", "t", "c", "u"):
+        if cmds[i] in ("s", "b", "t", "c", "i"):
             verb = cmds[i]
-            if verb in ("s", "u"):
+            if verb == "s":
                 result.append((verb, None))
                 i += 1
                 continue
@@ -212,12 +224,36 @@ def run_colcon(args: List[str], extra_opts: List[str]) -> None:
         sys.exit(ret)
 
 
-def run_rosdep(extra_opts: List[str]) -> None:
+def _build_rosdep_cmd(spec, pkg):
+    """Build rosdep command based on spec and package."""
+    args = ["install", "--from-paths"]
+
+    if spec == "a":
+        # Install for all packages in workspace
+        args.extend(["src", "--ignore-src", "-y", "--recursive"])
+    elif spec == "o":
+        # Install only for specific package
+        if not pkg:
+            raise ParseError("rosdep 'only' requires a package name")
+        args.extend([f"src/{pkg}", "--ignore-src", "-y"])
+    elif spec == "u":
+        # Install for package and its dependencies (recursive)
+        if not pkg:
+            raise ParseError("rosdep 'upto' requires a package name")
+        args.extend([f"src/{pkg}", "--ignore-src", "-y", "--recursive"])
+    else:
+        raise ParseError(f"unknown specifier '{spec}'")
+
+    return args
+
+
+def run_rosdep(args: List[str], extra_opts: List[str]) -> None:
     # Run rosdep install on the workspace
     import shlex
 
+    safe_args = [str(a) for a in args]
     safe_extra_opts = [str(a) for a in extra_opts]
-    cmd = ["rosdep", "install", "--from-paths", "src", "--ignore-src", "-y"] + safe_extra_opts
+    cmd = ["rosdep"] + safe_args + safe_extra_opts
     print("+ " + " ".join(shlex.quote(a) for a in cmd))
     # Use subprocess.run with shell=False for safety
     ret = subprocess.run(cmd, check=False).returncode
@@ -264,13 +300,19 @@ def main(argv=None) -> None:
             # do not run colcon for 's'
             continue
 
-        if verb == "u":
+        if verb == "i":
             # run rosdep install on workspace
+            # determine pkg if needed
+            need_pkg: bool = spec in ("o", "u")
+            pkg: Optional[str] = get_pkg(override_pkg) if need_pkg else None
+            args: List[str] = _build_rosdep_cmd(spec, pkg)
+
             # Support --dry-run for tests
             if "--dry-run" in extra_opts:
-                print("+ rosdep install --from-paths src --recursive --ignore-src -y " + " ".join(extra_opts))
+                print("+ rosdep " + " ".join(args + extra_opts))
                 continue
-            run_rosdep(extra_opts)
+
+            run_rosdep(args, extra_opts)
             continue
 
         # determine pkg if needed
