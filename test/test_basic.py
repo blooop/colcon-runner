@@ -182,6 +182,7 @@ class IntegrationTests(unittest.TestCase):
                 colcon_runner.main(["ia", "--dry-run"])
 
             output = buf.getvalue()
+            self.assertIn("rosdep update", output)
             self.assertIn("rosdep install --from-paths src --ignore-src -y", output)
 
             # Test install only with package
@@ -190,6 +191,7 @@ class IntegrationTests(unittest.TestCase):
                 colcon_runner.main(["io", "test_pkg", "--dry-run"])
 
             output = buf.getvalue()
+            self.assertIn("rosdep update", output)
             self.assertIn("rosdep install --from-paths src/test_pkg --ignore-src -y", output)
 
             # subprocess.run should *not* be called when --dry-run is active

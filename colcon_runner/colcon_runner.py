@@ -300,6 +300,9 @@ def main(argv=None) -> None:
 
     parsed_verbs = _parse_verbs(cmds)
 
+    # Track if rosdep update has been run
+    rosdep_updated = False
+
     # execute each segment
     for verb, spec in parsed_verbs:
         if verb == "s":
@@ -312,6 +315,17 @@ def main(argv=None) -> None:
 
         # Determine which tool to use based on verb
         tool = "rosdep" if verb == "i" else "colcon"
+
+        # Run rosdep update before first rosdep install
+        if tool == "rosdep" and not rosdep_updated:
+            if "--dry-run" not in extra_opts:
+                print("+ rosdep update")
+                ret = subprocess.run(["rosdep", "update"], check=False).returncode
+                if ret != 0:
+                    sys.exit(ret)
+            else:
+                print("+ rosdep update")
+            rosdep_updated = True
 
         # Determine if package is needed
         need_pkg: bool = spec in ("o", "u")
