@@ -243,7 +243,7 @@ def _build_cmd(tool: str, verb: str, spec: str, pkg: Optional[str]) -> List[str]
         args = ["install", "--from-paths"]
         if spec == "a":
             # Install for all packages in workspace
-            args.extend(["src", "--ignore-src", "-y", "--recursive"])
+            args.extend(["src", "--ignore-src", "-y"])
         elif spec == "o":
             # Install only for specific package
             if not pkg:
@@ -257,7 +257,7 @@ def _build_cmd(tool: str, verb: str, spec: str, pkg: Optional[str]) -> List[str]
                 raise ParseError("rosdep 'upto' requires a package name")
             safe_pkg = _sanitize_pkg_name(pkg)
             pkg_path = os.path.join("src", safe_pkg)
-            args.extend([pkg_path, "--ignore-src", "-y", "--recursive"])
+            args.extend([pkg_path, "--ignore-src", "-y"])
         else:
             raise ParseError(f"unknown specifier '{spec}'")
         return args

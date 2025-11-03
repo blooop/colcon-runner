@@ -89,9 +89,7 @@ class RosdepCommandTests(unittest.TestCase):
     # pylint: disable=protected-access
     def test_install_all(self):
         cmd = colcon_runner._build_rosdep_cmd("a", None)
-        self.assertEqual(
-            cmd, ["install", "--from-paths", "src", "--ignore-src", "-y", "--recursive"]
-        )
+        self.assertEqual(cmd, ["install", "--from-paths", "src", "--ignore-src", "-y"])
 
     def test_install_only(self):
         cmd = colcon_runner._build_rosdep_cmd("o", "pkg")
@@ -99,9 +97,7 @@ class RosdepCommandTests(unittest.TestCase):
 
     def test_install_upto(self):
         cmd = colcon_runner._build_rosdep_cmd("u", "pkg")
-        self.assertEqual(
-            cmd, ["install", "--from-paths", "src/pkg", "--ignore-src", "-y", "--recursive"]
-        )
+        self.assertEqual(cmd, ["install", "--from-paths", "src/pkg", "--ignore-src", "-y"])
 
     def test_missing_pkg_only(self):
         with self.assertRaises(colcon_runner.ParseError):
@@ -186,7 +182,7 @@ class IntegrationTests(unittest.TestCase):
                 colcon_runner.main(["ia", "--dry-run"])
 
             output = buf.getvalue()
-            self.assertIn("rosdep install --from-paths src --ignore-src -y --recursive", output)
+            self.assertIn("rosdep install --from-paths src --ignore-src -y", output)
 
             # Test install only with package
             buf = io.StringIO()
