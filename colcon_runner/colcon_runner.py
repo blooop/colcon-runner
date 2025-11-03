@@ -19,6 +19,7 @@ VERBS
     b       build packages.
     t       Test packages.
     c       clean packages.
+    u       update dependencies using rosdep.
 
 SPECIFIER
     o       only (--packages-select)
@@ -66,6 +67,9 @@ USAGE EXAMPLES
     cr cu pkg_1
         Clean upto 'pkg_1'.
 
+    cr u
+        Update dependencies by running rosdep install on the workspace.
+
   Compound Commands:
     cr s pkg1
         Set 'pkg_1' as the default package for subsequent commands.
@@ -75,6 +79,9 @@ USAGE EXAMPLES
 
     cr cbt
         Clean all, build all, and test all. (shorthand)
+
+    cr ub
+        Update dependencies and build all.
 
     cr cabu
         Clean all and build up to 'pkg1'.
@@ -88,6 +95,7 @@ USAGE EXAMPLES
 
 NOTES
     - The 's' verb sets a default package name stored in a configuration file.
+    - The 'u' verb runs rosdep install on the entire workspace and does not take a specifier.
     - Subsequent commands that require a package argument will use the default if none is provided.
     - Compound verbs can be chained together for streamlined operations.
 
@@ -112,9 +120,9 @@ def _parse_verbs(cmds: str):
     result = []
     i = 0
     while i < len(cmds):
-        if cmds[i] in ("s", "b", "t", "c"):
+        if cmds[i] in ("s", "b", "t", "c", "u"):
             verb = cmds[i]
-            if verb == "s":
+            if verb in ("s", "u"):
                 result.append((verb, None))
                 i += 1
                 continue
@@ -204,6 +212,19 @@ def run_colcon(args: List[str], extra_opts: List[str]) -> None:
         sys.exit(ret)
 
 
+def run_rosdep(extra_opts: List[str]) -> None:
+    # Run rosdep install on the workspace
+    import shlex
+
+    safe_extra_opts = [str(a) for a in extra_opts]
+    cmd = ["rosdep", "install", "--from-paths", "src", "--ignore-src", "-y"] + safe_extra_opts
+    print("+ " + " ".join(shlex.quote(a) for a in cmd))
+    # Use subprocess.run with shell=False for safety
+    ret = subprocess.run(cmd, check=False).returncode
+    if ret != 0:
+        sys.exit(ret)
+
+
 def main(argv=None) -> None:
     if argv is None:
         argv = sys.argv[1:]
@@ -241,6 +262,15 @@ def main(argv=None) -> None:
                 error("'s' requires a package name")
             save_default_pkg(override_pkg)
             # do not run colcon for 's'
+            continue
+
+        if verb == "u":
+            # run rosdep install on workspace
+            # Support --dry-run for tests
+            if "--dry-run" in extra_opts:
+                print("+ rosdep install --from-paths src --recursive --ignore-src -y " + " ".join(extra_opts))
+                continue
+            run_rosdep(extra_opts)
             continue
 
         # determine pkg if needed

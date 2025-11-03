@@ -42,6 +42,15 @@ class ParseVerbTests(unittest.TestCase):
         self.assertEqual(colcon_runner._parse_verbs("bobt"), [("b", "o"), ("b", "a"), ("t", "a")])
         self.assertEqual(colcon_runner._parse_verbs("cbt"), [("c", "a"), ("b", "a"), ("t", "a")])
 
+    def test_update_verb(self):
+        # 'u' verb doesn't take a specifier (like 's')
+        self.assertEqual(colcon_runner._parse_verbs("u"), [("u", None)])
+        # 'u' can be combined with other verbs
+        self.assertEqual(colcon_runner._parse_verbs("ub"), [("u", None), ("b", "a")])
+        self.assertEqual(colcon_runner._parse_verbs("ubt"), [("u", None), ("b", "a"), ("t", "a")])
+        # 'bu' should parse as build upto (specifier), not build + update
+        self.assertEqual(colcon_runner._parse_verbs("bu"), [("b", "u")])
+
 
 class BuildCommandTests(unittest.TestCase):
     # pylint: disable=protected-access
@@ -89,6 +98,20 @@ class IntegrationTests(unittest.TestCase):
 
             output = buf.getvalue()
             self.assertIn("--packages-select demo_pkg", output)
+            # subprocess.run should *not* be called when --dry-run is active
+            m_sp.run.assert_not_called()
+
+    def test_update_verb_dry_run(self):
+        # Test that 'u' verb generates correct rosdep command
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["u", "--dry-run"])
+
+            output = buf.getvalue()
+            self.assertIn("rosdep install --from-paths src --ignore-src -y", output)
             # subprocess.run should *not* be called when --dry-run is active
             m_sp.run.assert_not_called()
 
