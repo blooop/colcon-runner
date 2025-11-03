@@ -140,6 +140,36 @@ def _sanitize_pkg_name(pkg: str) -> str:
     return pkg
 
 
+def _find_workspace_root() -> str:
+    """Find the workspace root by looking for a 'src' directory.
+
+    Searches from the current directory upward until finding a directory
+    containing a 'src' subdirectory, similar to how colcon detects workspaces.
+
+    Returns:
+        Absolute path to the workspace root directory.
+
+    Raises:
+        ParseError: If no workspace root is found.
+    """
+    current = os.path.abspath(os.getcwd())
+
+    # Check if we're inside a src directory
+    if os.path.basename(current) == "src":
+        return os.path.dirname(current)
+
+    # Search upward for a directory containing 'src'
+    while True:
+        src_path = os.path.join(current, "src")
+        if os.path.isdir(src_path):
+            return current
+
+        parent = os.path.dirname(current)
+        if parent == current:  # Reached filesystem root
+            raise ParseError("Could not find workspace root (no 'src' directory found)")
+        current = parent
+
+
 def _parse_verbs(cmds: str):
     """Parse a string like 'boto' into [(verb, spec), ...]."""
     result = []
@@ -240,23 +270,27 @@ def _run_tool(tool: str, args: List[str], extra_opts: List[str]) -> None:
 def _build_cmd(tool: str, verb: str, spec: str, pkg: Optional[str]) -> List[str]:
     """Build command arguments based on tool, verb, spec, and package."""
     if tool == "rosdep":
+        # Find workspace root to build correct paths
+        workspace_root = _find_workspace_root()
+        src_dir = os.path.join(workspace_root, "src")
+
         args = ["install", "--from-paths"]
         if spec == "a":
             # Install for all packages in workspace
-            args.extend(["src", "--ignore-src", "-y"])
+            args.extend([src_dir, "--ignore-src", "-y"])
         elif spec == "o":
             # Install only for specific package
             if not pkg:
                 raise ParseError("rosdep 'only' requires a package name")
             safe_pkg = _sanitize_pkg_name(pkg)
-            pkg_path = os.path.join("src", safe_pkg)
+            pkg_path = os.path.join(src_dir, safe_pkg)
             args.extend([pkg_path, "--ignore-src", "-y"])
         elif spec == "u":
             # Install for package and its dependencies (recursive)
             if not pkg:
                 raise ParseError("rosdep 'upto' requires a package name")
             safe_pkg = _sanitize_pkg_name(pkg)
-            pkg_path = os.path.join("src", safe_pkg)
+            pkg_path = os.path.join(src_dir, safe_pkg)
             args.extend([pkg_path, "--ignore-src", "-y"])
         else:
             raise ParseError(f"unknown specifier '{spec}'")

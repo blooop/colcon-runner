@@ -87,17 +87,31 @@ class BuildCommandTests(unittest.TestCase):
 
 class RosdepCommandTests(unittest.TestCase):
     # pylint: disable=protected-access
+    def setUp(self):
+        # Mock workspace root detection to return a known path
+        self.workspace_patch = mock.patch.object(
+            colcon_runner, "_find_workspace_root", return_value="/fake/workspace"
+        )
+        self.workspace_patch.start()
+        self.addCleanup(self.workspace_patch.stop)
+
     def test_install_all(self):
         cmd = colcon_runner._build_rosdep_cmd("a", None)
-        self.assertEqual(cmd, ["install", "--from-paths", "src", "--ignore-src", "-y"])
+        self.assertEqual(
+            cmd, ["install", "--from-paths", "/fake/workspace/src", "--ignore-src", "-y"]
+        )
 
     def test_install_only(self):
         cmd = colcon_runner._build_rosdep_cmd("o", "pkg")
-        self.assertEqual(cmd, ["install", "--from-paths", "src/pkg", "--ignore-src", "-y"])
+        self.assertEqual(
+            cmd, ["install", "--from-paths", "/fake/workspace/src/pkg", "--ignore-src", "-y"]
+        )
 
     def test_install_upto(self):
         cmd = colcon_runner._build_rosdep_cmd("u", "pkg")
-        self.assertEqual(cmd, ["install", "--from-paths", "src/pkg", "--ignore-src", "-y"])
+        self.assertEqual(
+            cmd, ["install", "--from-paths", "/fake/workspace/src/pkg", "--ignore-src", "-y"]
+        )
 
     def test_missing_pkg_only(self):
         with self.assertRaises(colcon_runner.ParseError):
@@ -148,6 +162,13 @@ class IntegrationTests(unittest.TestCase):
         )
         os.environ["CR_CONFIG"] = self.tmp_file_path
 
+        # Mock workspace root detection to return a known path
+        self.workspace_patch = mock.patch.object(
+            colcon_runner, "_find_workspace_root", return_value="/test/workspace"
+        )
+        self.workspace_patch.start()
+        self.addCleanup(self.workspace_patch.stop)
+
     def test_set_default_and_dry_run(self):
         # Patch subprocess.run so no real commands are executed.
         with mock.patch.object(colcon_runner, "subprocess") as m_sp:
@@ -183,7 +204,7 @@ class IntegrationTests(unittest.TestCase):
 
             output = buf.getvalue()
             self.assertIn("rosdep update", output)
-            self.assertIn("rosdep install --from-paths src --ignore-src -y", output)
+            self.assertIn("rosdep install --from-paths /test/workspace/src --ignore-src -y", output)
 
             # Test install only with package
             buf = io.StringIO()
@@ -192,7 +213,10 @@ class IntegrationTests(unittest.TestCase):
 
             output = buf.getvalue()
             self.assertIn("rosdep update", output)
-            self.assertIn("rosdep install --from-paths src/test_pkg --ignore-src -y", output)
+            self.assertIn(
+                "rosdep install --from-paths /test/workspace/src/test_pkg --ignore-src -y",
+                output,
+            )
 
             # subprocess.run should *not* be called when --dry-run is active
             m_sp.run.assert_not_called()
