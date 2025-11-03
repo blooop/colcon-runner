@@ -353,7 +353,7 @@ packages:
 - pypi: ./
   name: colcon-runner
   version: 0.3.0
-  sha256: 9ac302dad39e4cf4fa69546a89672a5a26943f4acc2df723308deb7ac681aff3
+  sha256: 35f69ccde691edb2595577a54cff832ff8c846bc32dbad1406af931336a61d68
   requires_dist:
   - pylint>=3.2.5,<=3.3.8 ; extra == 'test'
   - pytest-cov>=4.1,<=7.0.0 ; extra == 'test'
