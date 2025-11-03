@@ -118,6 +118,7 @@ SEE ALSO
 import sys
 import os
 import subprocess
+import shlex
 from typing import Optional, List
 
 PKG_FILE: str = os.path.expanduser("~/.colcon_shortcuts_pkg")
@@ -127,26 +128,39 @@ class ParseError(Exception):
     pass
 
 
+def _sanitize_pkg_name(pkg: str) -> str:
+    """Sanitize package name to prevent path traversal."""
+    if not pkg:
+        raise ParseError("Package name cannot be empty")
+    if "/" in pkg or "\\" in pkg or ".." in pkg:
+        raise ParseError("Invalid package name: path traversal detected")
+    # Enforce strict rules: only allow alphanumeric, underscores, and dashes
+    if not pkg.replace("_", "").replace("-", "").isalnum():
+        raise ParseError("Invalid package name: only alphanumeric, underscores, and dashes allowed")
+    return pkg
+
+
 def _parse_verbs(cmds: str):
     """Parse a string like 'boto' into [(verb, spec), ...]."""
     result = []
     i = 0
     while i < len(cmds):
-        if cmds[i] in ("s", "b", "t", "c", "i"):
-            verb = cmds[i]
-            if verb == "s":
-                result.append((verb, None))
-                i += 1
-                continue
-            # If no specifier provided or invalid specifier, default to "a"
-            if i + 1 >= len(cmds) or cmds[i + 1] not in ("o", "u", "a"):
-                result.append((verb, "a"))
-                i += 1
-            else:
-                result.append((verb, cmds[i + 1]))
-                i += 2
-        else:
+        if cmds[i] not in ("s", "b", "t", "c", "i"):
             raise ParseError(f"unknown command letter '{cmds[i]}'")
+
+        verb = cmds[i]
+        if verb == "s":
+            result.append((verb, None))
+            i += 1
+            continue
+
+        # If no specifier provided or invalid specifier, default to "a"
+        if i + 1 >= len(cmds) or cmds[i + 1] not in ("o", "u", "a"):
+            result.append((verb, "a"))
+            i += 1
+        else:
+            result.append((verb, cmds[i + 1]))
+            i += 2
     return result
 
 
@@ -210,13 +224,12 @@ def get_pkg(override: Optional[str]) -> str:
     return None
 
 
-def run_colcon(args: List[str], extra_opts: List[str]) -> None:
+def _run_tool(tool: str, args: List[str], extra_opts: List[str]) -> None:
+    """Run a tool (colcon or rosdep) with the given arguments."""
     # Defensive: ensure all args are strings and not user-controlled shell input
-    import shlex
-
     safe_args = [str(a) for a in args]
     safe_extra_opts = [str(a) for a in extra_opts]
-    cmd = ["colcon"] + safe_args + safe_extra_opts
+    cmd = [tool] + safe_args + safe_extra_opts
     print("+ " + " ".join(shlex.quote(a) for a in cmd))
     # Use subprocess.run with shell=False for safety
     ret = subprocess.run(cmd, check=False).returncode
@@ -224,41 +237,38 @@ def run_colcon(args: List[str], extra_opts: List[str]) -> None:
         sys.exit(ret)
 
 
-def _build_rosdep_cmd(spec, pkg):
-    """Build rosdep command based on spec and package."""
-    args = ["install", "--from-paths"]
+def _build_cmd(tool: str, verb: str, spec: str, pkg: Optional[str]) -> List[str]:
+    """Build command arguments based on tool, verb, spec, and package."""
+    if tool == "rosdep":
+        args = ["install", "--from-paths"]
+        if spec == "a":
+            # Install for all packages in workspace
+            args.extend(["src", "--ignore-src", "-y", "--recursive"])
+        elif spec == "o":
+            # Install only for specific package
+            if not pkg:
+                raise ParseError("rosdep 'only' requires a package name")
+            safe_pkg = _sanitize_pkg_name(pkg)
+            pkg_path = os.path.join("src", safe_pkg)
+            args.extend([pkg_path, "--ignore-src", "-y"])
+        elif spec == "u":
+            # Install for package and its dependencies (recursive)
+            if not pkg:
+                raise ParseError("rosdep 'upto' requires a package name")
+            safe_pkg = _sanitize_pkg_name(pkg)
+            pkg_path = os.path.join("src", safe_pkg)
+            args.extend([pkg_path, "--ignore-src", "-y", "--recursive"])
+        else:
+            raise ParseError(f"unknown specifier '{spec}'")
+        return args
 
-    if spec == "a":
-        # Install for all packages in workspace
-        args.extend(["src", "--ignore-src", "-y", "--recursive"])
-    elif spec == "o":
-        # Install only for specific package
-        if not pkg:
-            raise ParseError("rosdep 'only' requires a package name")
-        args.extend([f"src/{pkg}", "--ignore-src", "-y"])
-    elif spec == "u":
-        # Install for package and its dependencies (recursive)
-        if not pkg:
-            raise ParseError("rosdep 'upto' requires a package name")
-        args.extend([f"src/{pkg}", "--ignore-src", "-y", "--recursive"])
-    else:
-        raise ParseError(f"unknown specifier '{spec}'")
-
-    return args
+    # fallback for colcon
+    return _build_colcon_cmd(verb, spec, pkg)
 
 
-def run_rosdep(args: List[str], extra_opts: List[str]) -> None:
-    # Run rosdep install on the workspace
-    import shlex
-
-    safe_args = [str(a) for a in args]
-    safe_extra_opts = [str(a) for a in extra_opts]
-    cmd = ["rosdep"] + safe_args + safe_extra_opts
-    print("+ " + " ".join(shlex.quote(a) for a in cmd))
-    # Use subprocess.run with shell=False for safety
-    ret = subprocess.run(cmd, check=False).returncode
-    if ret != 0:
-        sys.exit(ret)
+def _build_rosdep_cmd(spec: str, pkg: Optional[str]) -> List[str]:
+    """Build rosdep command (wrapper for backward compatibility with tests)."""
+    return _build_cmd("rosdep", "", spec, pkg)
 
 
 def main(argv=None) -> None:
@@ -268,7 +278,7 @@ def main(argv=None) -> None:
         print(
             "No arguments provided. Running 'colcon build' by default.\nUse '--help' for more options."
         )
-        run_colcon(["build"], [])
+        _run_tool("colcon", ["build"], [])
         sys.exit(0)
 
     # Add --help and -h support
@@ -297,35 +307,27 @@ def main(argv=None) -> None:
             if not override_pkg:
                 error("'s' requires a package name")
             save_default_pkg(override_pkg)
-            # do not run colcon for 's'
+            # do not run any tool for 's'
             continue
 
-        if verb == "i":
-            # run rosdep install on workspace
-            # determine pkg if needed
-            need_pkg: bool = spec in ("o", "u")
-            pkg: Optional[str] = get_pkg(override_pkg) if need_pkg else None
-            args: List[str] = _build_rosdep_cmd(spec, pkg)
+        # Determine which tool to use based on verb
+        tool = "rosdep" if verb == "i" else "colcon"
 
-            # Support --dry-run for tests
-            if "--dry-run" in extra_opts:
-                print("+ rosdep " + " ".join(args + extra_opts))
-                continue
-
-            run_rosdep(args, extra_opts)
-            continue
-
-        # determine pkg if needed
+        # Determine if package is needed
         need_pkg: bool = spec in ("o", "u")
         pkg: Optional[str] = get_pkg(override_pkg) if need_pkg else None
-        args: List[str] = _build_colcon_cmd(verb, spec, pkg)
+
+        # Build command arguments
+        args: List[str] = _build_cmd(tool, verb, spec, pkg)
 
         # Support --dry-run for tests
         if "--dry-run" in extra_opts:
-            print("+ " + " ".join(args + extra_opts))
+            cmd_args = [tool] + args + extra_opts
+            print("+ " + " ".join(shlex.quote(a) for a in cmd_args))
             continue
 
-        run_colcon(args, extra_opts)
+        # Execute the command
+        _run_tool(tool, args, extra_opts)
 
 
 if __name__ == "__main__":

@@ -53,6 +53,17 @@ class ParseVerbTests(unittest.TestCase):
         self.assertEqual(colcon_runner._parse_verbs("iobo"), [("i", "o"), ("b", "o")])
         self.assertEqual(colcon_runner._parse_verbs("ibt"), [("i", "a"), ("b", "a"), ("t", "a")])
 
+    def test_install_verb_invalid_specifiers(self):
+        # Test that invalid specifiers default to "a" for 'i' verb
+        self.assertEqual(colcon_runner._parse_verbs("ix"), [("i", "a")])
+        # Next character 'x' should raise error
+        with self.assertRaises(colcon_runner.ParseError) as cm:
+            colcon_runner._parse_verbs("ix")
+        # Actually 'x' will be treated as next verb, so it should fail
+        with self.assertRaises(colcon_runner.ParseError) as cm:
+            colcon_runner._parse_verbs("ixa")
+        self.assertIn("unknown command letter 'x'", str(cm.exception))
+
 
 class BuildCommandTests(unittest.TestCase):
     # pylint: disable=protected-access
@@ -73,7 +84,9 @@ class RosdepCommandTests(unittest.TestCase):
     # pylint: disable=protected-access
     def test_install_all(self):
         cmd = colcon_runner._build_rosdep_cmd("a", None)
-        self.assertEqual(cmd, ["install", "--from-paths", "src", "--ignore-src", "-y", "--recursive"])
+        self.assertEqual(
+            cmd, ["install", "--from-paths", "src", "--ignore-src", "-y", "--recursive"]
+        )
 
     def test_install_only(self):
         cmd = colcon_runner._build_rosdep_cmd("o", "pkg")
@@ -81,7 +94,9 @@ class RosdepCommandTests(unittest.TestCase):
 
     def test_install_upto(self):
         cmd = colcon_runner._build_rosdep_cmd("u", "pkg")
-        self.assertEqual(cmd, ["install", "--from-paths", "src/pkg", "--ignore-src", "-y", "--recursive"])
+        self.assertEqual(
+            cmd, ["install", "--from-paths", "src/pkg", "--ignore-src", "-y", "--recursive"]
+        )
 
     def test_missing_pkg_only(self):
         with self.assertRaises(colcon_runner.ParseError):
@@ -90,6 +105,35 @@ class RosdepCommandTests(unittest.TestCase):
     def test_missing_pkg_upto(self):
         with self.assertRaises(colcon_runner.ParseError):
             colcon_runner._build_rosdep_cmd("u", None)
+
+    def test_package_name_sanitization(self):
+        # Test valid package names
+        self.assertEqual(colcon_runner._sanitize_pkg_name("valid_pkg"), "valid_pkg")
+        self.assertEqual(colcon_runner._sanitize_pkg_name("pkg-with-dash"), "pkg-with-dash")
+        self.assertEqual(colcon_runner._sanitize_pkg_name("pkg123"), "pkg123")
+
+        # Test path traversal attempts
+        with self.assertRaises(colcon_runner.ParseError) as cm:
+            colcon_runner._sanitize_pkg_name("../etc/passwd")
+        self.assertIn("path traversal", str(cm.exception))
+
+        with self.assertRaises(colcon_runner.ParseError) as cm:
+            colcon_runner._sanitize_pkg_name("pkg/../other")
+        self.assertIn("path traversal", str(cm.exception))
+
+        with self.assertRaises(colcon_runner.ParseError) as cm:
+            colcon_runner._sanitize_pkg_name("pkg/subdir")
+        self.assertIn("path traversal", str(cm.exception))
+
+        # Test invalid characters
+        with self.assertRaises(colcon_runner.ParseError) as cm:
+            colcon_runner._sanitize_pkg_name("pkg@invalid")
+        self.assertIn("only alphanumeric", str(cm.exception))
+
+        # Test empty package name
+        with self.assertRaises(colcon_runner.ParseError) as cm:
+            colcon_runner._sanitize_pkg_name("")
+        self.assertIn("cannot be empty", str(cm.exception))
 
 
 class IntegrationTests(unittest.TestCase):
