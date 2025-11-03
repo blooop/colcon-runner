@@ -54,15 +54,20 @@ class ParseVerbTests(unittest.TestCase):
         self.assertEqual(colcon_runner._parse_verbs("ibt"), [("i", "a"), ("b", "a"), ("t", "a")])
 
     def test_install_verb_invalid_specifiers(self):
-        # Test that invalid specifiers default to "a" for 'i' verb
-        self.assertEqual(colcon_runner._parse_verbs("ix"), [("i", "a")])
-        # Next character 'x' should raise error
+        # Test that invalid specifiers default to "a" for 'i' verb, then 'x' is treated as next verb
+        # Since 'x' is not a valid verb, it should raise an error
         with self.assertRaises(colcon_runner.ParseError) as cm:
             colcon_runner._parse_verbs("ix")
-        # Actually 'x' will be treated as next verb, so it should fail
-        with self.assertRaises(colcon_runner.ParseError) as cm:
-            colcon_runner._parse_verbs("ixa")
         self.assertIn("unknown command letter 'x'", str(cm.exception))
+
+        # Test another invalid character
+        with self.assertRaises(colcon_runner.ParseError) as cm:
+            colcon_runner._parse_verbs("iz")
+        self.assertIn("unknown command letter 'z'", str(cm.exception))
+
+        # Test that valid verbs after invalid specifier work
+        # 'ib' should parse as: 'i' with default 'a', then 'b' with default 'a'
+        self.assertEqual(colcon_runner._parse_verbs("ib"), [("i", "a"), ("b", "a")])
 
 
 class BuildCommandTests(unittest.TestCase):
