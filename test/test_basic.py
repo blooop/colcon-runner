@@ -98,19 +98,19 @@ class RosdepCommandTests(unittest.TestCase):
     def test_install_all(self):
         cmd = colcon_runner._build_rosdep_cmd("a", None)
         self.assertEqual(
-            cmd, ["install", "--from-paths", "/fake/workspace/src", "--ignore-src", "-y"]
+            cmd, ["install", "--from-paths", "/fake/workspace/src", "--ignore-src", "-y", "-r"]
         )
 
     def test_install_only(self):
         cmd = colcon_runner._build_rosdep_cmd("o", "pkg")
         self.assertEqual(
-            cmd, ["install", "--from-paths", "/fake/workspace/src/pkg", "--ignore-src", "-y"]
+            cmd, ["install", "--from-paths", "/fake/workspace/src/pkg", "--ignore-src", "-y", "-r"]
         )
 
     def test_install_upto(self):
         cmd = colcon_runner._build_rosdep_cmd("u", "pkg")
         self.assertEqual(
-            cmd, ["install", "--from-paths", "/fake/workspace/src/pkg", "--ignore-src", "-y"]
+            cmd, ["install", "--from-paths", "/fake/workspace/src/pkg", "--ignore-src", "-y", "-r"]
         )
 
     def test_missing_pkg_only(self):
@@ -204,7 +204,7 @@ class IntegrationTests(unittest.TestCase):
 
             output = buf.getvalue()
             self.assertIn("rosdep update", output)
-            self.assertIn("rosdep install --from-paths /test/workspace/src --ignore-src -y", output)
+            self.assertIn("rosdep install --from-paths /test/workspace/src --ignore-src -y -r", output)
 
             # Test install only with package
             buf = io.StringIO()
@@ -214,7 +214,7 @@ class IntegrationTests(unittest.TestCase):
             output = buf.getvalue()
             self.assertIn("rosdep update", output)
             self.assertIn(
-                "rosdep install --from-paths /test/workspace/src/test_pkg --ignore-src -y",
+                "rosdep install --from-paths /test/workspace/src/test_pkg --ignore-src -y -r",
                 output,
             )
 
