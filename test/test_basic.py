@@ -204,7 +204,9 @@ class IntegrationTests(unittest.TestCase):
 
             output = buf.getvalue()
             self.assertIn("rosdep update", output)
-            self.assertIn("rosdep install --from-paths /test/workspace/src --ignore-src -y -r", output)
+            self.assertIn(
+                "rosdep install --from-paths /test/workspace/src --ignore-src -y -r", output
+            )
 
             # Test install only with package
             buf = io.StringIO()
@@ -227,7 +229,7 @@ class IntegrationTests(unittest.TestCase):
             m_sp.run.return_value.returncode = 0
 
             # Test build with package but no specifier (defaults to 'all')
-            with self.assertLogs(colcon_runner.logger, level='WARNING') as cm:
+            with self.assertLogs(colcon_runner.logger, level="WARNING") as cm:
                 buf_stdout = io.StringIO()
                 with contextlib.redirect_stdout(buf_stdout):
                     colcon_runner.main(["b", "example_package", "--dry-run"])
@@ -238,7 +240,7 @@ class IntegrationTests(unittest.TestCase):
             self.assertIn("or 'bu example_package' (up-to)?", log_output)
 
             # Test install with package but no specifier
-            with self.assertLogs(colcon_runner.logger, level='WARNING') as cm:
+            with self.assertLogs(colcon_runner.logger, level="WARNING") as cm:
                 buf_stdout = io.StringIO()
                 with contextlib.redirect_stdout(buf_stdout):
                     colcon_runner.main(["i", "example_package", "--dry-run"])
@@ -267,7 +269,8 @@ class RosdepCacheTests(unittest.TestCase):
         self.assertIn("/tmp/colcon_runner_rosdep_update_", cache_file)
         # Should end with date in YYYY-MM-DD format
         import re
-        self.assertTrue(re.search(r'\d{4}-\d{2}-\d{2}$', cache_file))
+
+        self.assertTrue(re.search(r"\d{4}-\d{2}-\d{2}$", cache_file))
 
     def test_rosdep_update_needed_no_cache(self):
         # When cache file doesn't exist, update is needed
