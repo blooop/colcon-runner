@@ -274,26 +274,22 @@ def _build_cmd(tool: str, verb: str, spec: str, pkg: Optional[str]) -> List[str]
         workspace_root = _find_workspace_root()
         src_dir = os.path.join(workspace_root, "src")
 
-        args = ["install", "--from-paths"]
+        # Determine target path based on spec
         if spec == "a":
             # Install for all packages in workspace
-            args.extend([src_dir, "--ignore-src", "-y", "-r"])
-        elif spec == "o":
-            # Install only for specific package
+            target_path = src_dir
+        elif spec in ("o", "u"):
+            # Install only for specific package or package and its dependencies
             if not pkg:
-                raise ParseError("rosdep 'only' requires a package name")
+                spec_name = "only" if spec == "o" else "upto"
+                raise ParseError(f"rosdep '{spec_name}' requires a package name")
             safe_pkg = _sanitize_pkg_name(pkg)
-            pkg_path = os.path.join(src_dir, safe_pkg)
-            args.extend([pkg_path, "--ignore-src", "-y", "-r"])
-        elif spec == "u":
-            # Install for package and its dependencies (recursive)
-            if not pkg:
-                raise ParseError("rosdep 'upto' requires a package name")
-            safe_pkg = _sanitize_pkg_name(pkg)
-            pkg_path = os.path.join(src_dir, safe_pkg)
-            args.extend([pkg_path, "--ignore-src", "-y", "-r"])
+            target_path = os.path.join(src_dir, safe_pkg)
         else:
             raise ParseError(f"unknown specifier '{spec}'")
+
+        # Build command with common flags
+        args = ["install", "--from-paths", target_path, "--ignore-src", "-y", "-r"]
         return args
 
     # fallback for colcon
