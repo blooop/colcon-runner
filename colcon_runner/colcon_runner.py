@@ -261,8 +261,15 @@ def _run_tool(tool: str, args: List[str], extra_opts: List[str]) -> None:
     safe_extra_opts = [str(a) for a in extra_opts]
     cmd = [tool] + safe_args + safe_extra_opts
     print("+ " + " ".join(shlex.quote(a) for a in cmd))
+
+    # Suppress DeprecationWarnings for rosdep (pkg_resources warning)
+    env = None
+    if tool == "rosdep":
+        env = os.environ.copy()
+        env["PYTHONWARNINGS"] = "ignore::DeprecationWarning"
+
     # Use subprocess.run with shell=False for safety
-    ret = subprocess.run(cmd, check=False).returncode
+    ret = subprocess.run(cmd, check=False, env=env).returncode
     if ret != 0:
         sys.exit(ret)
 
@@ -350,7 +357,10 @@ def main(argv=None) -> None:
         if tool == "rosdep" and not rosdep_updated:
             if "--dry-run" not in extra_opts:
                 print("+ rosdep update")
-                ret = subprocess.run(["rosdep", "update"], check=False).returncode
+                # Suppress DeprecationWarnings for rosdep
+                env = os.environ.copy()
+                env["PYTHONWARNINGS"] = "ignore::DeprecationWarning"
+                ret = subprocess.run(["rosdep", "update"], check=False, env=env).returncode
                 if ret != 0:
                     sys.exit(ret)
             else:
