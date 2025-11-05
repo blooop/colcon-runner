@@ -289,7 +289,7 @@ def _build_cmd(tool: str, verb: str, spec: str, pkg: Optional[str]) -> List[str]
             raise ParseError(f"unknown specifier '{spec}'")
 
         # Build command with common flags
-        args = ["install", "--from-paths", target_path, "--ignore-src", "-y", "-r"]
+        args = ["install", "--from-paths", target_path, "--ignore-src", "-y", "-r", "-v"]
         return args
 
     # fallback for colcon
@@ -360,6 +360,18 @@ def main(argv=None) -> None:
         # Determine if package is needed
         need_pkg: bool = spec in ("o", "u")
         pkg: Optional[str] = get_pkg(override_pkg) if need_pkg else None
+
+        # Warn if package name provided but will be ignored
+        if spec == "a" and override_pkg and not override_pkg.startswith("-"):
+            verb_name = {"b": "build", "t": "test", "c": "clean", "i": "install"}.get(verb, verb)
+            print(
+                f"Warning: Package name '{override_pkg}' provided but specifier defaulted to 'all'.",
+                file=sys.stderr,
+            )
+            print(
+                f"         Did you mean '{verb}o {override_pkg}' (only) or '{verb}u {override_pkg}' (up-to)?",
+                file=sys.stderr,
+            )
 
         # Build command arguments
         args: List[str] = _build_cmd(tool, verb, spec, pkg)

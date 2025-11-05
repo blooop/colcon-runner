@@ -98,19 +98,19 @@ class RosdepCommandTests(unittest.TestCase):
     def test_install_all(self):
         cmd = colcon_runner._build_rosdep_cmd("a", None)
         self.assertEqual(
-            cmd, ["install", "--from-paths", "/fake/workspace/src", "--ignore-src", "-y", "-r"]
+            cmd, ["install", "--from-paths", "/fake/workspace/src", "--ignore-src", "-y", "-r", "-v"]
         )
 
     def test_install_only(self):
         cmd = colcon_runner._build_rosdep_cmd("o", "pkg")
         self.assertEqual(
-            cmd, ["install", "--from-paths", "/fake/workspace/src/pkg", "--ignore-src", "-y", "-r"]
+            cmd, ["install", "--from-paths", "/fake/workspace/src/pkg", "--ignore-src", "-y", "-r", "-v"]
         )
 
     def test_install_upto(self):
         cmd = colcon_runner._build_rosdep_cmd("u", "pkg")
         self.assertEqual(
-            cmd, ["install", "--from-paths", "/fake/workspace/src/pkg", "--ignore-src", "-y", "-r"]
+            cmd, ["install", "--from-paths", "/fake/workspace/src/pkg", "--ignore-src", "-y", "-r", "-v"]
         )
 
     def test_missing_pkg_only(self):
@@ -204,7 +204,7 @@ class IntegrationTests(unittest.TestCase):
 
             output = buf.getvalue()
             self.assertIn("rosdep update", output)
-            self.assertIn("rosdep install --from-paths /test/workspace/src --ignore-src -y -r", output)
+            self.assertIn("rosdep install --from-paths /test/workspace/src --ignore-src -y -r -v", output)
 
             # Test install only with package
             buf = io.StringIO()
@@ -214,9 +214,39 @@ class IntegrationTests(unittest.TestCase):
             output = buf.getvalue()
             self.assertIn("rosdep update", output)
             self.assertIn(
-                "rosdep install --from-paths /test/workspace/src/test_pkg --ignore-src -y -r",
+                "rosdep install --from-paths /test/workspace/src/test_pkg --ignore-src -y -r -v",
                 output,
             )
+
+            # subprocess.run should *not* be called when --dry-run is active
+            m_sp.run.assert_not_called()
+
+    def test_warning_package_with_default_spec(self):
+        # Test that warning is shown when package name provided but spec defaults to 'all'
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+
+            # Test build with package but no specifier (defaults to 'all')
+            buf_stdout = io.StringIO()
+            buf_stderr = io.StringIO()
+            with contextlib.redirect_stdout(buf_stdout), contextlib.redirect_stderr(buf_stderr):
+                colcon_runner.main(["b", "example_package", "--dry-run"])
+
+            stderr_output = buf_stderr.getvalue()
+            self.assertIn("Warning: Package name 'example_package' provided", stderr_output)
+            self.assertIn("Did you mean 'bo example_package' (only)", stderr_output)
+            self.assertIn("or 'bu example_package' (up-to)?", stderr_output)
+
+            # Test install with package but no specifier
+            buf_stdout = io.StringIO()
+            buf_stderr = io.StringIO()
+            with contextlib.redirect_stdout(buf_stdout), contextlib.redirect_stderr(buf_stderr):
+                colcon_runner.main(["i", "example_package", "--dry-run"])
+
+            stderr_output = buf_stderr.getvalue()
+            self.assertIn("Warning: Package name 'example_package' provided", stderr_output)
+            self.assertIn("Did you mean 'io example_package' (only)", stderr_output)
+            self.assertIn("or 'iu example_package' (up-to)?", stderr_output)
 
             # subprocess.run should *not* be called when --dry-run is active
             m_sp.run.assert_not_called()
