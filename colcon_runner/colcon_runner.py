@@ -19,6 +19,7 @@ VERBS
     b       build packages.
     t       Test packages.
     c       clean packages.
+    i       install dependencies using rosdep.
 
 SPECIFIER
     o       only (--packages-select)
@@ -66,6 +67,18 @@ USAGE EXAMPLES
     cr cu pkg_1
         Clean upto 'pkg_1'.
 
+    cr i
+        Install all dependencies using rosdep. (shorthand)
+
+    cr ia
+        Install all dependencies using rosdep. (explicit)
+
+    cr io pkg_1
+        Install dependencies only for 'pkg_1'.
+
+    cr iu pkg_1
+        Install dependencies for 'pkg_1' and its dependencies.
+
   Compound Commands:
     cr s pkg1
         Set 'pkg_1' as the default package for subsequent commands.
@@ -75,6 +88,12 @@ USAGE EXAMPLES
 
     cr cbt
         Clean all, build all, and test all. (shorthand)
+
+    cr ib
+        Install all dependencies and build all.
+
+    cr iobo
+        Install dependencies for 'pkg1' only, then build only 'pkg1'.
 
     cr cabu
         Clean all and build up to 'pkg1'.
@@ -88,6 +107,7 @@ USAGE EXAMPLES
 
 NOTES
     - The 's' verb sets a default package name stored in a configuration file.
+    - The 'i' verb runs rosdep install and supports the same specifiers as other verbs.
     - Subsequent commands that require a package argument will use the default if none is provided.
     - Compound verbs can be chained together for streamlined operations.
 
@@ -98,13 +118,99 @@ SEE ALSO
 import sys
 import os
 import subprocess
+import shlex
+import logging
+from datetime import datetime
 from typing import Optional, List
 
 PKG_FILE: str = os.path.expanduser("~/.colcon_shortcuts_pkg")
 
 
+# Configure logging with colored output for warnings
+class ColoredFormatter(logging.Formatter):
+    """Custom formatter that adds color to WARNING level messages."""
+
+    YELLOW = "\033[33m"
+    RESET = "\033[0m"
+
+    def format(self, record):
+        if record.levelno == logging.WARNING and sys.stderr.isatty():
+            record.msg = f"{self.YELLOW}{record.msg}{self.RESET}"
+        return super().format(record)
+
+
+# Set up logger
+logger = logging.getLogger("colcon_runner")
+logger.setLevel(logging.WARNING)
+handler = logging.StreamHandler(sys.stderr)
+handler.setFormatter(ColoredFormatter("%(message)s"))
+logger.addHandler(handler)
+
+
+def _get_rosdep_cache_file() -> str:
+    """Get the path to today's rosdep update cache file."""
+    today = datetime.now().strftime("%Y-%m-%d")
+    return f"/tmp/colcon_runner_rosdep_update_{today}"
+
+
+def _rosdep_update_needed() -> bool:
+    """Check if rosdep update needs to be run (hasn't been run today)."""
+    cache_file = _get_rosdep_cache_file()
+    return not os.path.exists(cache_file)
+
+
+def _mark_rosdep_updated() -> None:
+    """Mark that rosdep update has been run today."""
+    cache_file = _get_rosdep_cache_file()
+    # Create the cache file
+    with open(cache_file, "w", encoding="utf-8") as f:
+        f.write(datetime.now().isoformat())
+
+
 class ParseError(Exception):
     pass
+
+
+def _sanitize_pkg_name(pkg: str) -> str:
+    """Sanitize package name to prevent path traversal."""
+    if not pkg:
+        raise ParseError("Package name cannot be empty")
+    if "/" in pkg or "\\" in pkg or ".." in pkg:
+        raise ParseError("Invalid package name: path traversal detected")
+    # Enforce strict rules: only allow alphanumeric, underscores, and dashes
+    if not pkg.replace("_", "").replace("-", "").isalnum():
+        raise ParseError("Invalid package name: only alphanumeric, underscores, and dashes allowed")
+    return pkg
+
+
+def _find_workspace_root() -> str:
+    """Find the workspace root by looking for a 'src' directory.
+
+    Searches from the current directory upward until finding a directory
+    containing a 'src' subdirectory, similar to how colcon detects workspaces.
+
+    Returns:
+        Absolute path to the workspace root directory.
+
+    Raises:
+        ParseError: If no workspace root is found.
+    """
+    current = os.path.abspath(os.getcwd())
+
+    # Check if we're inside a src directory
+    if os.path.basename(current) == "src":
+        return os.path.dirname(current)
+
+    # Search upward for a directory containing 'src'
+    while True:
+        src_path = os.path.join(current, "src")
+        if os.path.isdir(src_path):
+            return current
+
+        parent = os.path.dirname(current)
+        if parent == current:  # Reached filesystem root
+            raise ParseError("Could not find workspace root (no 'src' directory found)")
+        current = parent
 
 
 def _parse_verbs(cmds: str):
@@ -112,21 +218,22 @@ def _parse_verbs(cmds: str):
     result = []
     i = 0
     while i < len(cmds):
-        if cmds[i] in ("s", "b", "t", "c"):
-            verb = cmds[i]
-            if verb == "s":
-                result.append((verb, None))
-                i += 1
-                continue
-            # If no specifier provided or invalid specifier, default to "a"
-            if i + 1 >= len(cmds) or cmds[i + 1] not in ("o", "u", "a"):
-                result.append((verb, "a"))
-                i += 1
-            else:
-                result.append((verb, cmds[i + 1]))
-                i += 2
-        else:
+        if cmds[i] not in ("s", "b", "t", "c", "i"):
             raise ParseError(f"unknown command letter '{cmds[i]}'")
+
+        verb = cmds[i]
+        if verb == "s":
+            result.append((verb, None))
+            i += 1
+            continue
+
+        # If no specifier provided or invalid specifier, default to "a"
+        if i + 1 >= len(cmds) or cmds[i + 1] not in ("o", "u", "a"):
+            result.append((verb, "a"))
+            i += 1
+        else:
+            result.append((verb, cmds[i + 1]))
+            i += 2
     return result
 
 
@@ -190,18 +297,58 @@ def get_pkg(override: Optional[str]) -> str:
     return None
 
 
-def run_colcon(args: List[str], extra_opts: List[str]) -> None:
+def _run_tool(tool: str, args: List[str], extra_opts: List[str]) -> None:
+    """Run a tool (colcon or rosdep) with the given arguments."""
     # Defensive: ensure all args are strings and not user-controlled shell input
-    import shlex
-
     safe_args = [str(a) for a in args]
     safe_extra_opts = [str(a) for a in extra_opts]
-    cmd = ["colcon"] + safe_args + safe_extra_opts
+    cmd = [tool] + safe_args + safe_extra_opts
     print("+ " + " ".join(shlex.quote(a) for a in cmd))
+
+    # Suppress DeprecationWarnings for rosdep (pkg_resources warning)
+    env = None
+    if tool == "rosdep":
+        env = os.environ.copy()
+        env["PYTHONWARNINGS"] = "ignore::DeprecationWarning"
+
     # Use subprocess.run with shell=False for safety
-    ret = subprocess.run(cmd, check=False).returncode
+    ret = subprocess.run(cmd, check=False, env=env).returncode
     if ret != 0:
         sys.exit(ret)
+
+
+def _build_cmd(tool: str, verb: str, spec: str, pkg: Optional[str]) -> List[str]:
+    """Build command arguments based on tool, verb, spec, and package."""
+    if tool == "rosdep":
+        # Find workspace root to build correct paths
+        workspace_root = _find_workspace_root()
+        src_dir = os.path.join(workspace_root, "src")
+
+        # Determine target path based on spec
+        if spec == "a":
+            # Install for all packages in workspace
+            target_path = src_dir
+        elif spec in ("o", "u"):
+            # Install only for specific package or package and its dependencies
+            if not pkg:
+                spec_name = "only" if spec == "o" else "upto"
+                raise ParseError(f"rosdep '{spec_name}' requires a package name")
+            safe_pkg = _sanitize_pkg_name(pkg)
+            target_path = os.path.join(src_dir, safe_pkg)
+        else:
+            raise ParseError(f"unknown specifier '{spec}'")
+
+        # Build command with common flags
+        args = ["install", "--from-paths", target_path, "--ignore-src", "-y", "-r"]
+        return args
+
+    # fallback for colcon
+    return _build_colcon_cmd(verb, spec, pkg)
+
+
+def _build_rosdep_cmd(spec: str, pkg: Optional[str]) -> List[str]:
+    """Build rosdep command (wrapper for backward compatibility with tests)."""
+    return _build_cmd("rosdep", "", spec, pkg)
 
 
 def main(argv=None) -> None:
@@ -211,7 +358,7 @@ def main(argv=None) -> None:
         print(
             "No arguments provided. Running 'colcon build' by default.\nUse '--help' for more options."
         )
-        run_colcon(["build"], [])
+        _run_tool("colcon", ["build"], [])
         sys.exit(0)
 
     # Add --help and -h support
@@ -233,6 +380,9 @@ def main(argv=None) -> None:
 
     parsed_verbs = _parse_verbs(cmds)
 
+    # Track if rosdep update has been run
+    rosdep_updated = False
+
     # execute each segment
     for verb, spec in parsed_verbs:
         if verb == "s":
@@ -240,20 +390,52 @@ def main(argv=None) -> None:
             if not override_pkg:
                 error("'s' requires a package name")
             save_default_pkg(override_pkg)
-            # do not run colcon for 's'
+            # do not run any tool for 's'
             continue
 
-        # determine pkg if needed
+        # Determine which tool to use based on verb
+        tool = "rosdep" if verb == "i" else "colcon"
+
+        # Run rosdep update before first rosdep install (max once per day)
+        if tool == "rosdep" and not rosdep_updated:
+            if _rosdep_update_needed():
+                if "--dry-run" not in extra_opts:
+                    print("+ rosdep update")
+                    # Suppress DeprecationWarnings for rosdep
+                    env = os.environ.copy()
+                    env["PYTHONWARNINGS"] = "ignore::DeprecationWarning"
+                    ret = subprocess.run(["rosdep", "update"], check=False, env=env).returncode
+                    if ret != 0:
+                        sys.exit(ret)
+                    _mark_rosdep_updated()
+                else:
+                    print("+ rosdep update")
+            else:
+                print("+ rosdep update (skipped - already run today)")
+            rosdep_updated = True
+
+        # Determine if package is needed
         need_pkg: bool = spec in ("o", "u")
         pkg: Optional[str] = get_pkg(override_pkg) if need_pkg else None
-        args: List[str] = _build_colcon_cmd(verb, spec, pkg)
+
+        # Warn if package name provided but will be ignored
+        if spec == "a" and override_pkg and not override_pkg.startswith("-"):
+            logger.warning(
+                f"Package name '{override_pkg}' provided but specifier defaulted to 'all'.\n"
+                f"         Did you mean '{verb}o {override_pkg}' (only) or '{verb}u {override_pkg}' (up-to)?"
+            )
+
+        # Build command arguments
+        args: List[str] = _build_cmd(tool, verb, spec, pkg)
 
         # Support --dry-run for tests
         if "--dry-run" in extra_opts:
-            print("+ " + " ".join(args + extra_opts))
+            cmd_args = [tool] + args + extra_opts
+            print("+ " + " ".join(shlex.quote(a) for a in cmd_args))
             continue
 
-        run_colcon(args, extra_opts)
+        # Execute the command
+        _run_tool(tool, args, extra_opts)
 
 
 if __name__ == "__main__":

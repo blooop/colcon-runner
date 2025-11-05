@@ -42,6 +42,33 @@ class ParseVerbTests(unittest.TestCase):
         self.assertEqual(colcon_runner._parse_verbs("bobt"), [("b", "o"), ("b", "a"), ("t", "a")])
         self.assertEqual(colcon_runner._parse_verbs("cbt"), [("c", "a"), ("b", "a"), ("t", "a")])
 
+    def test_install_verb(self):
+        # 'i' verb takes specifiers like 'b', 't', 'c'
+        self.assertEqual(colcon_runner._parse_verbs("i"), [("i", "a")])
+        self.assertEqual(colcon_runner._parse_verbs("ia"), [("i", "a")])
+        self.assertEqual(colcon_runner._parse_verbs("io"), [("i", "o")])
+        self.assertEqual(colcon_runner._parse_verbs("iu"), [("i", "u")])
+        # 'i' can be combined with other verbs
+        self.assertEqual(colcon_runner._parse_verbs("ib"), [("i", "a"), ("b", "a")])
+        self.assertEqual(colcon_runner._parse_verbs("iobo"), [("i", "o"), ("b", "o")])
+        self.assertEqual(colcon_runner._parse_verbs("ibt"), [("i", "a"), ("b", "a"), ("t", "a")])
+
+    def test_install_verb_invalid_specifiers(self):
+        # Test that invalid specifiers default to "a" for 'i' verb, then 'x' is treated as next verb
+        # Since 'x' is not a valid verb, it should raise an error
+        with self.assertRaises(colcon_runner.ParseError) as cm:
+            colcon_runner._parse_verbs("ix")
+        self.assertIn("unknown command letter 'x'", str(cm.exception))
+
+        # Test another invalid character
+        with self.assertRaises(colcon_runner.ParseError) as cm:
+            colcon_runner._parse_verbs("iz")
+        self.assertIn("unknown command letter 'z'", str(cm.exception))
+
+        # Test that valid verbs after invalid specifier work
+        # 'ib' should parse as: 'i' with default 'a', then 'b' with default 'a'
+        self.assertEqual(colcon_runner._parse_verbs("ib"), [("i", "a"), ("b", "a")])
+
 
 class BuildCommandTests(unittest.TestCase):
     # pylint: disable=protected-access
@@ -58,6 +85,72 @@ class BuildCommandTests(unittest.TestCase):
             colcon_runner._build_colcon_cmd("c", "u", None)
 
 
+class RosdepCommandTests(unittest.TestCase):
+    # pylint: disable=protected-access
+    def setUp(self):
+        # Mock workspace root detection to return a known path
+        self.workspace_patch = mock.patch.object(
+            colcon_runner, "_find_workspace_root", return_value="/fake/workspace"
+        )
+        self.workspace_patch.start()
+        self.addCleanup(self.workspace_patch.stop)
+
+    def test_install_all(self):
+        cmd = colcon_runner._build_rosdep_cmd("a", None)
+        self.assertEqual(
+            cmd, ["install", "--from-paths", "/fake/workspace/src", "--ignore-src", "-y", "-r"]
+        )
+
+    def test_install_only(self):
+        cmd = colcon_runner._build_rosdep_cmd("o", "pkg")
+        self.assertEqual(
+            cmd, ["install", "--from-paths", "/fake/workspace/src/pkg", "--ignore-src", "-y", "-r"]
+        )
+
+    def test_install_upto(self):
+        cmd = colcon_runner._build_rosdep_cmd("u", "pkg")
+        self.assertEqual(
+            cmd, ["install", "--from-paths", "/fake/workspace/src/pkg", "--ignore-src", "-y", "-r"]
+        )
+
+    def test_missing_pkg_only(self):
+        with self.assertRaises(colcon_runner.ParseError):
+            colcon_runner._build_rosdep_cmd("o", None)
+
+    def test_missing_pkg_upto(self):
+        with self.assertRaises(colcon_runner.ParseError):
+            colcon_runner._build_rosdep_cmd("u", None)
+
+    def test_package_name_sanitization(self):
+        # Test valid package names
+        self.assertEqual(colcon_runner._sanitize_pkg_name("valid_pkg"), "valid_pkg")
+        self.assertEqual(colcon_runner._sanitize_pkg_name("pkg-with-dash"), "pkg-with-dash")
+        self.assertEqual(colcon_runner._sanitize_pkg_name("pkg123"), "pkg123")
+
+        # Test path traversal attempts
+        with self.assertRaises(colcon_runner.ParseError) as cm:
+            colcon_runner._sanitize_pkg_name("../etc/passwd")
+        self.assertIn("path traversal", str(cm.exception))
+
+        with self.assertRaises(colcon_runner.ParseError) as cm:
+            colcon_runner._sanitize_pkg_name("pkg/../other")
+        self.assertIn("path traversal", str(cm.exception))
+
+        with self.assertRaises(colcon_runner.ParseError) as cm:
+            colcon_runner._sanitize_pkg_name("pkg/subdir")
+        self.assertIn("path traversal", str(cm.exception))
+
+        # Test invalid characters
+        with self.assertRaises(colcon_runner.ParseError) as cm:
+            colcon_runner._sanitize_pkg_name("pkg@invalid")
+        self.assertIn("only alphanumeric", str(cm.exception))
+
+        # Test empty package name
+        with self.assertRaises(colcon_runner.ParseError) as cm:
+            colcon_runner._sanitize_pkg_name("")
+        self.assertIn("cannot be empty", str(cm.exception))
+
+
 class IntegrationTests(unittest.TestCase):
     def setUp(self):
         # Use a temporary config location so we don't clobber the user's file.
@@ -68,6 +161,13 @@ class IntegrationTests(unittest.TestCase):
             lambda: os.path.exists(self.tmp_file_path) and os.unlink(self.tmp_file_path)
         )
         os.environ["CR_CONFIG"] = self.tmp_file_path
+
+        # Mock workspace root detection to return a known path
+        self.workspace_patch = mock.patch.object(
+            colcon_runner, "_find_workspace_root", return_value="/test/workspace"
+        )
+        self.workspace_patch.start()
+        self.addCleanup(self.workspace_patch.stop)
 
     def test_set_default_and_dry_run(self):
         # Patch subprocess.run so no real commands are executed.
@@ -91,6 +191,125 @@ class IntegrationTests(unittest.TestCase):
             self.assertIn("--packages-select demo_pkg", output)
             # subprocess.run should *not* be called when --dry-run is active
             m_sp.run.assert_not_called()
+
+    def test_install_verb_dry_run(self):
+        # Test that 'i' verb generates correct rosdep command
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+
+            # Test install all
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["ia", "--dry-run"])
+
+            output = buf.getvalue()
+            self.assertIn("rosdep update", output)
+            self.assertIn(
+                "rosdep install --from-paths /test/workspace/src --ignore-src -y -r", output
+            )
+
+            # Test install only with package
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["io", "test_pkg", "--dry-run"])
+
+            output = buf.getvalue()
+            self.assertIn("rosdep update", output)
+            self.assertIn(
+                "rosdep install --from-paths /test/workspace/src/test_pkg --ignore-src -y -r",
+                output,
+            )
+
+            # subprocess.run should *not* be called when --dry-run is active
+            m_sp.run.assert_not_called()
+
+    def test_warning_package_with_default_spec(self):
+        # Test that warning is shown when package name provided but spec defaults to 'all'
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+
+            # Test build with package but no specifier (defaults to 'all')
+            with self.assertLogs(colcon_runner.logger, level="WARNING") as cm:
+                buf_stdout = io.StringIO()
+                with contextlib.redirect_stdout(buf_stdout):
+                    colcon_runner.main(["b", "example_package", "--dry-run"])
+
+            log_output = "\n".join(cm.output)
+            self.assertIn("Package name 'example_package' provided", log_output)
+            self.assertIn("Did you mean 'bo example_package' (only)", log_output)
+            self.assertIn("or 'bu example_package' (up-to)?", log_output)
+
+            # Test install with package but no specifier
+            with self.assertLogs(colcon_runner.logger, level="WARNING") as cm:
+                buf_stdout = io.StringIO()
+                with contextlib.redirect_stdout(buf_stdout):
+                    colcon_runner.main(["i", "example_package", "--dry-run"])
+
+            log_output = "\n".join(cm.output)
+            self.assertIn("Package name 'example_package' provided", log_output)
+            self.assertIn("Did you mean 'io example_package' (only)", log_output)
+            self.assertIn("or 'iu example_package' (up-to)?", log_output)
+
+            # subprocess.run should *not* be called when --dry-run is active
+            m_sp.run.assert_not_called()
+
+
+class RosdepCacheTests(unittest.TestCase):
+    # pylint: disable=protected-access
+    def setUp(self):
+        # Mock workspace root detection
+        self.workspace_patch = mock.patch.object(
+            colcon_runner, "_find_workspace_root", return_value="/test/workspace"
+        )
+        self.workspace_patch.start()
+        self.addCleanup(self.workspace_patch.stop)
+
+    def test_rosdep_cache_file_format(self):
+        # Test that cache file has correct date format
+        cache_file = colcon_runner._get_rosdep_cache_file()
+        self.assertIn("/tmp/colcon_runner_rosdep_update_", cache_file)
+        # Should end with date in YYYY-MM-DD format
+        import re
+
+        self.assertTrue(re.search(r"\d{4}-\d{2}-\d{2}$", cache_file))
+
+    def test_rosdep_update_needed_no_cache(self):
+        # When cache file doesn't exist, update is needed
+        with mock.patch.object(colcon_runner.os.path, "exists", return_value=False):
+            self.assertTrue(colcon_runner._rosdep_update_needed())
+
+    def test_rosdep_update_not_needed_with_cache(self):
+        # When cache file exists, update is not needed
+        with mock.patch.object(colcon_runner.os.path, "exists", return_value=True):
+            self.assertFalse(colcon_runner._rosdep_update_needed())
+
+    def test_rosdep_update_runs_once_then_skipped(self):
+        # Test that rosdep update runs first time, then is skipped
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+
+            with mock.patch.object(colcon_runner, "_rosdep_update_needed") as m_update_needed:
+                with mock.patch.object(colcon_runner, "_mark_rosdep_updated"):
+                    # First call - update is needed
+                    m_update_needed.return_value = True
+
+                    buf = io.StringIO()
+                    with contextlib.redirect_stdout(buf):
+                        colcon_runner.main(["ia", "--dry-run"])
+
+                    output = buf.getvalue()
+                    self.assertIn("rosdep update", output)
+                    self.assertNotIn("skipped", output)
+
+                    # Second call - update not needed
+                    m_update_needed.return_value = False
+
+                    buf = io.StringIO()
+                    with contextlib.redirect_stdout(buf):
+                        colcon_runner.main(["ia", "--dry-run"])
+
+                    output = buf.getvalue()
+                    self.assertIn("rosdep update (skipped - already run today)", output)
 
 
 if __name__ == "__main__":  # pragma: no cover — run the tests

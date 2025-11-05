@@ -41,6 +41,7 @@ VERBS
     b       build packages.
     t       Test packages.
     c       clean packages.
+    i       install dependencies using rosdep.
 
 SPECIFIER
     o       only (--packages-select)
@@ -91,6 +92,18 @@ USAGE EXAMPLES
     cr cu pkg_1
         Clean upto 'pkg_1'.
 
+    cr i
+        Install all dependencies using rosdep. (shorthand)
+
+    cr ia
+        Install all dependencies using rosdep. (explicit)
+
+    cr io pkg_1
+        Install dependencies only for 'pkg_1'.
+
+    cr iu pkg_1
+        Install dependencies for 'pkg_1' and its dependencies.
+
   Compound Commands:
     cr s pkg1
         Set 'pkg_1' as the default package for subsequent commands.
@@ -100,6 +113,12 @@ USAGE EXAMPLES
 
     cr cbt
         Clean all, build all, and test all. (shorthand)
+
+    cr ib
+        Install all dependencies and build all.
+
+    cr iobo
+        Install dependencies for 'pkg1' only, then build only 'pkg1'.
 
     cr cabu
         Clean all and build up to 'pkg1'.
@@ -113,6 +132,7 @@ USAGE EXAMPLES
 
 NOTES
     - The 's' verb sets a default package name stored in a configuration file.
+    - The 'i' verb runs rosdep install and supports the same specifiers as other verbs.
     - Subsequent commands that require a package argument will use the default if none is provided.
     - Compound verbs can be chained together for streamlined operations.
 
