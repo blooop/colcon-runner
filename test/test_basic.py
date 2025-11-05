@@ -252,5 +252,61 @@ class IntegrationTests(unittest.TestCase):
             m_sp.run.assert_not_called()
 
 
+class RosdepCacheTests(unittest.TestCase):
+    def setUp(self):
+        # Mock workspace root detection
+        self.workspace_patch = mock.patch.object(
+            colcon_runner, "_find_workspace_root", return_value="/test/workspace"
+        )
+        self.workspace_patch.start()
+        self.addCleanup(self.workspace_patch.stop)
+
+    def test_rosdep_cache_file_format(self):
+        # Test that cache file has correct date format
+        cache_file = colcon_runner._get_rosdep_cache_file()
+        self.assertIn("/tmp/colcon_runner_rosdep_update_", cache_file)
+        # Should end with date in YYYY-MM-DD format
+        import re
+        self.assertTrue(re.search(r'\d{4}-\d{2}-\d{2}$', cache_file))
+
+    def test_rosdep_update_needed_no_cache(self):
+        # When cache file doesn't exist, update is needed
+        with mock.patch.object(colcon_runner.os.path, "exists", return_value=False):
+            self.assertTrue(colcon_runner._rosdep_update_needed())
+
+    def test_rosdep_update_not_needed_with_cache(self):
+        # When cache file exists, update is not needed
+        with mock.patch.object(colcon_runner.os.path, "exists", return_value=True):
+            self.assertFalse(colcon_runner._rosdep_update_needed())
+
+    def test_rosdep_update_runs_once_then_skipped(self):
+        # Test that rosdep update runs first time, then is skipped
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+
+            with mock.patch.object(colcon_runner, "_rosdep_update_needed") as m_update_needed:
+                with mock.patch.object(colcon_runner, "_mark_rosdep_updated") as m_mark:
+                    # First call - update is needed
+                    m_update_needed.return_value = True
+
+                    buf = io.StringIO()
+                    with contextlib.redirect_stdout(buf):
+                        colcon_runner.main(["ia", "--dry-run"])
+
+                    output = buf.getvalue()
+                    self.assertIn("rosdep update", output)
+                    self.assertNotIn("skipped", output)
+
+                    # Second call - update not needed
+                    m_update_needed.return_value = False
+
+                    buf = io.StringIO()
+                    with contextlib.redirect_stdout(buf):
+                        colcon_runner.main(["ia", "--dry-run"])
+
+                    output = buf.getvalue()
+                    self.assertIn("rosdep update (skipped - already run today)", output)
+
+
 if __name__ == "__main__":  # pragma: no cover — run the tests
     unittest.main(verbosity=2)

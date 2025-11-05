@@ -119,9 +119,30 @@ import sys
 import os
 import subprocess
 import shlex
+from datetime import datetime
 from typing import Optional, List
 
 PKG_FILE: str = os.path.expanduser("~/.colcon_shortcuts_pkg")
+
+
+def _get_rosdep_cache_file() -> str:
+    """Get the path to today's rosdep update cache file."""
+    today = datetime.now().strftime("%Y-%m-%d")
+    return f"/tmp/colcon_runner_rosdep_update_{today}"
+
+
+def _rosdep_update_needed() -> bool:
+    """Check if rosdep update needs to be run (hasn't been run today)."""
+    cache_file = _get_rosdep_cache_file()
+    return not os.path.exists(cache_file)
+
+
+def _mark_rosdep_updated() -> None:
+    """Mark that rosdep update has been run today."""
+    cache_file = _get_rosdep_cache_file()
+    # Create the cache file
+    with open(cache_file, "w", encoding="utf-8") as f:
+        f.write(datetime.now().isoformat())
 
 
 class ParseError(Exception):
@@ -353,18 +374,22 @@ def main(argv=None) -> None:
         # Determine which tool to use based on verb
         tool = "rosdep" if verb == "i" else "colcon"
 
-        # Run rosdep update before first rosdep install
+        # Run rosdep update before first rosdep install (max once per day)
         if tool == "rosdep" and not rosdep_updated:
-            if "--dry-run" not in extra_opts:
-                print("+ rosdep update")
-                # Suppress DeprecationWarnings for rosdep
-                env = os.environ.copy()
-                env["PYTHONWARNINGS"] = "ignore::DeprecationWarning"
-                ret = subprocess.run(["rosdep", "update"], check=False, env=env).returncode
-                if ret != 0:
-                    sys.exit(ret)
+            if _rosdep_update_needed():
+                if "--dry-run" not in extra_opts:
+                    print("+ rosdep update")
+                    # Suppress DeprecationWarnings for rosdep
+                    env = os.environ.copy()
+                    env["PYTHONWARNINGS"] = "ignore::DeprecationWarning"
+                    ret = subprocess.run(["rosdep", "update"], check=False, env=env).returncode
+                    if ret != 0:
+                        sys.exit(ret)
+                    _mark_rosdep_updated()
+                else:
+                    print("+ rosdep update")
             else:
-                print("+ rosdep update")
+                print("+ rosdep update (skipped - already run today)")
             rosdep_updated = True
 
         # Determine if package is needed
