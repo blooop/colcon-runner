@@ -420,7 +420,6 @@ def main(argv=None) -> None:
 
         # Warn if package name provided but will be ignored
         if spec == "a" and override_pkg and not override_pkg.startswith("-"):
-            verb_name = {"b": "build", "t": "test", "c": "clean", "i": "install"}.get(verb, verb)
             logger.warning(
                 f"Package name '{override_pkg}' provided but specifier defaulted to 'all'.\n"
                 f"         Did you mean '{verb}o {override_pkg}' (only) or '{verb}u {override_pkg}' (up-to)?"

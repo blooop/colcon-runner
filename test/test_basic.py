@@ -255,6 +255,7 @@ class IntegrationTests(unittest.TestCase):
 
 
 class RosdepCacheTests(unittest.TestCase):
+    # pylint: disable=protected-access
     def setUp(self):
         # Mock workspace root detection
         self.workspace_patch = mock.patch.object(
@@ -288,7 +289,7 @@ class RosdepCacheTests(unittest.TestCase):
             m_sp.run.return_value.returncode = 0
 
             with mock.patch.object(colcon_runner, "_rosdep_update_needed") as m_update_needed:
-                with mock.patch.object(colcon_runner, "_mark_rosdep_updated") as m_mark:
+                with mock.patch.object(colcon_runner, "_mark_rosdep_updated"):
                     # First call - update is needed
                     m_update_needed.return_value = True
 
