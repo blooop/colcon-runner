@@ -119,10 +119,32 @@ import sys
 import os
 import subprocess
 import shlex
+import logging
 from datetime import datetime
 from typing import Optional, List
 
 PKG_FILE: str = os.path.expanduser("~/.colcon_shortcuts_pkg")
+
+
+# Configure logging with colored output for warnings
+class ColoredFormatter(logging.Formatter):
+    """Custom formatter that adds color to WARNING level messages."""
+
+    YELLOW = "\033[33m"
+    RESET = "\033[0m"
+
+    def format(self, record):
+        if record.levelno == logging.WARNING and sys.stderr.isatty():
+            record.msg = f"{self.YELLOW}{record.msg}{self.RESET}"
+        return super().format(record)
+
+
+# Set up logger
+logger = logging.getLogger("colcon_runner")
+logger.setLevel(logging.WARNING)
+handler = logging.StreamHandler(sys.stderr)
+handler.setFormatter(ColoredFormatter("%(message)s"))
+logger.addHandler(handler)
 
 
 def _get_rosdep_cache_file() -> str:
@@ -317,7 +339,7 @@ def _build_cmd(tool: str, verb: str, spec: str, pkg: Optional[str]) -> List[str]
             raise ParseError(f"unknown specifier '{spec}'")
 
         # Build command with common flags
-        args = ["install", "--from-paths", target_path, "--ignore-src", "-y", "-r", "-v"]
+        args = ["install", "--from-paths", target_path, "--ignore-src", "-y", "-r"]
         return args
 
     # fallback for colcon
@@ -399,13 +421,9 @@ def main(argv=None) -> None:
         # Warn if package name provided but will be ignored
         if spec == "a" and override_pkg and not override_pkg.startswith("-"):
             verb_name = {"b": "build", "t": "test", "c": "clean", "i": "install"}.get(verb, verb)
-            print(
-                f"Warning: Package name '{override_pkg}' provided but specifier defaulted to 'all'.",
-                file=sys.stderr,
-            )
-            print(
-                f"         Did you mean '{verb}o {override_pkg}' (only) or '{verb}u {override_pkg}' (up-to)?",
-                file=sys.stderr,
+            logger.warning(
+                f"Package name '{override_pkg}' provided but specifier defaulted to 'all'.\n"
+                f"         Did you mean '{verb}o {override_pkg}' (only) or '{verb}u {override_pkg}' (up-to)?"
             )
 
         # Build command arguments
