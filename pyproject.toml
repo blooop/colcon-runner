@@ -1,5 +1,5 @@
 [project]
-name = "colcon_runner"
+name = "colcon-runner"
 version = "0.4.0"
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A concise CLI wrapper for colcon build/test/clean workflows."
@@ -33,7 +33,7 @@ python = "3.13.*"
 
 
 [tool.pixi.pypi-dependencies]
-colcon_runner = { path = ".", editable = true }
+colcon-runner = { path = ".", editable = true }
 
 [project.optional-dependencies]
 test = [
