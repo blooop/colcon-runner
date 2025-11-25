@@ -120,6 +120,7 @@ import os
 import subprocess
 import shlex
 import logging
+import yaml
 from datetime import datetime
 from typing import Optional, List
 
@@ -184,9 +185,10 @@ def _sanitize_pkg_name(pkg: str) -> str:
 
 
 def _find_workspace_root() -> str:
-    """Find the workspace root by looking for a 'src' directory.
+    """Find the workspace root.
 
-    Searches from the current directory upward until finding a directory
+    Checks COLCON_DEFAULTS_FILE for a 'base-path' entry first.
+    If not found, searches from the current directory upward until finding a directory
     containing a 'src' subdirectory, similar to how colcon detects workspaces.
 
     Returns:
@@ -195,6 +197,42 @@ def _find_workspace_root() -> str:
     Raises:
         ParseError: If no workspace root is found.
     """
+    # Determine potential defaults file paths in order of precedence
+    candidates = []
+
+    # 1. Environment variable
+    if "COLCON_DEFAULTS_FILE" in os.environ:
+        candidates.append(os.environ["COLCON_DEFAULTS_FILE"])
+
+    # 2. $COLCON_HOME/defaults.yaml
+    colcon_home = os.environ.get("COLCON_HOME")
+    if colcon_home:
+        candidates.append(os.path.join(colcon_home, "defaults.yaml"))
+
+    # 3. ~/.colcon/defaults.yaml (default location)
+    candidates.append(os.path.expanduser("~/.colcon/defaults.yaml"))
+
+    # Check candidates in order
+    for defaults_file in candidates:
+        if os.path.isfile(defaults_file):
+            try:
+                with open(defaults_file, "r", encoding="utf-8") as f:
+                    data = yaml.safe_load(f)
+                    if data and "base-path" in data:
+                        base_path = data["base-path"]
+                        # Handle relative paths relative to the defaults file
+                        if not os.path.isabs(base_path):
+                            base_path = os.path.join(os.path.dirname(defaults_file), base_path)
+                        return os.path.abspath(base_path)
+            except Exception as e:
+                # Log warning but continue to next candidate or fallback
+                logger.warning(f"Failed to parse defaults file '{defaults_file}': {e}")
+
+            # If we found a file but it didn't have base-path, should we stop?
+            # The colcon docs imply defaults are merged, but for base-path specifically,
+            # we probably want the first one that defines it.
+            # For now, let's continue searching if not found.
+
     current = os.path.abspath(os.getcwd())
 
     # Check if we're inside a src directory
