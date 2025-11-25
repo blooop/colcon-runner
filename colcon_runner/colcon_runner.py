@@ -285,6 +285,18 @@ def save_default_pkg(pkg: str) -> None:
 
 def error(msg: str) -> None:
     print(f"Error: {msg}", file=sys.stderr)
+
+    # Add helpful message for colcon configuration parsing errors
+    if 'TypeError' in msg and 'bool' in msg:
+        print(
+            "\nTroubleshooting Colcon Configuration:\n"
+            "- Check your colcon defaults YAML files for boolean values\n"
+            "- Convert 'yes: true' to 'yes: \"true\"' (quoted string)\n"
+            "- Ensure all configuration values are properly formatted as strings\n"
+            "Example:\n"
+            "  test-result:\n"
+            "    'yes': \"true\"  # Use quotes for boolean-like values"
+        )
     sys.exit(1)
 
 
