@@ -14,6 +14,19 @@ from unittest import mock
 from colcon_runner import colcon_runner
 
 
+class WorkspaceTestBase(unittest.TestCase):
+    """Base test class with common workspace mocking functionality."""
+
+    def _setup_workspace_mock(self, workspace_path: str = "/test/workspace"):
+        """Set up mock for workspace root detection."""
+        # Mock workspace root detection
+        workspace_patch = mock.patch.object(
+            colcon_runner, "_find_workspace_root", return_value=workspace_path
+        )
+        workspace_patch.start()
+        self.addCleanup(workspace_patch.stop)
+
+
 class ParseVerbTests(unittest.TestCase):
     # pylint: disable=protected-access
     def test_valid_pairs(self):
@@ -86,32 +99,27 @@ class BuildCommandTests(unittest.TestCase):
             colcon_runner._build_colcon_cmd("c", "u", None)
 
 
-class RosdepCommandTests(unittest.TestCase):
+class RosdepCommandTests(WorkspaceTestBase):
     # pylint: disable=protected-access
     def setUp(self):
-        # Mock workspace root detection to return a known path
-        self.workspace_patch = mock.patch.object(
-            colcon_runner, "_find_workspace_root", return_value="/fake/workspace"
-        )
-        self.workspace_patch.start()
-        self.addCleanup(self.workspace_patch.stop)
+        self._setup_workspace_mock("/fake/workspace")
 
     def test_install_all(self):
         cmd = colcon_runner._build_rosdep_cmd("a", None)
         self.assertEqual(
-            cmd, ["install", "--from-paths", "/fake/workspace", "--ignore-src", "-y", "-r"]
+            cmd, ["install", "--from-paths", "/fake/workspace/src", "--ignore-src", "-y", "-r"]
         )
 
     def test_install_only(self):
         cmd = colcon_runner._build_rosdep_cmd("o", "pkg")
         self.assertEqual(
-            cmd, ["install", "--from-paths", "/fake/workspace/pkg", "--ignore-src", "-y", "-r"]
+            cmd, ["install", "--from-paths", "/fake/workspace/src/pkg", "--ignore-src", "-y", "-r"]
         )
 
     def test_install_upto(self):
         cmd = colcon_runner._build_rosdep_cmd("u", "pkg")
         self.assertEqual(
-            cmd, ["install", "--from-paths", "/fake/workspace/pkg", "--ignore-src", "-y", "-r"]
+            cmd, ["install", "--from-paths", "/fake/workspace/src/pkg", "--ignore-src", "-y", "-r"]
         )
 
     def test_missing_pkg_only(self):
@@ -152,7 +160,7 @@ class RosdepCommandTests(unittest.TestCase):
         self.assertIn("cannot be empty", str(cm.exception))
 
 
-class IntegrationTests(unittest.TestCase):
+class IntegrationTests(WorkspaceTestBase):
     def setUp(self):
         # Use a temporary config location so we don't clobber the user's file.
         # Use tempfile.mkstemp to create a file descriptor and path we can use
@@ -162,13 +170,7 @@ class IntegrationTests(unittest.TestCase):
             lambda: os.path.exists(self.tmp_file_path) and os.unlink(self.tmp_file_path)
         )
         os.environ["CR_CONFIG"] = self.tmp_file_path
-
-        # Mock workspace root detection to return a known path
-        self.workspace_patch = mock.patch.object(
-            colcon_runner, "_find_workspace_root", return_value="/test/workspace"
-        )
-        self.workspace_patch.start()
-        self.addCleanup(self.workspace_patch.stop)
+        self._setup_workspace_mock("/test/workspace")
 
     def test_set_default_and_dry_run(self):
         # Patch subprocess.run so no real commands are executed.
@@ -205,7 +207,9 @@ class IntegrationTests(unittest.TestCase):
 
             output = buf.getvalue()
             self.assertIn("rosdep update", output)
-            self.assertIn("rosdep install --from-paths /test/workspace --ignore-src -y -r", output)
+            self.assertIn(
+                "rosdep install --from-paths /test/workspace/src --ignore-src -y -r", output
+            )
 
             # Test install only with package
             buf = io.StringIO()
@@ -215,7 +219,7 @@ class IntegrationTests(unittest.TestCase):
             output = buf.getvalue()
             self.assertIn("rosdep update", output)
             self.assertIn(
-                "rosdep install --from-paths /test/workspace/test_pkg --ignore-src -y -r",
+                "rosdep install --from-paths /test/workspace/src/test_pkg --ignore-src -y -r",
                 output,
             )
 
@@ -253,20 +257,16 @@ class IntegrationTests(unittest.TestCase):
             m_sp.run.assert_not_called()
 
 
-class UpdateCacheTests(unittest.TestCase):
+class UpdateCacheTests(WorkspaceTestBase):
     # pylint: disable=protected-access
     def setUp(self):
-        # Mock workspace root detection
-        self.workspace_patch = mock.patch.object(
-            colcon_runner, "_find_workspace_root", return_value="/test/workspace"
-        )
-        self.workspace_patch.start()
-        self.addCleanup(self.workspace_patch.stop)
+        self._setup_workspace_mock("/test/workspace")
 
     def test_rosdep_cache_file_format(self):
         # Test that cache file has correct date format
         cache_file = colcon_runner._get_update_cache_file()
-        self.assertIn("/tmp/colcon_runner_update_", cache_file)
+        # Should contain the temp directory and our cache file prefix
+        self.assertIn("colcon_runner_update_", cache_file)
         # Should end with date in YYYY-MM-DD format
         import re
 
@@ -311,6 +311,35 @@ class UpdateCacheTests(unittest.TestCase):
                     output = buf.getvalue()
                     self.assertIn("sudo apt update (skipped - already run today)", output)
                     self.assertIn("rosdep update (skipped - already run today)", output)
+
+    def test_apt_update_failure_warning(self):
+        """Test that apt update failure shows warning but continues with rosdep update."""
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            # Mock apt update to fail (return code 1) but rosdep update to succeed
+            def mock_run(*args, **_kwargs):
+                if "apt" in args[0]:
+                    mock_result = mock.Mock()
+                    mock_result.returncode = 1
+                    return mock_result
+                # rosdep update
+                mock_result = mock.Mock()
+                mock_result.returncode = 0
+                return mock_result
+
+            m_sp.run.side_effect = mock_run
+
+            with mock.patch.object(colcon_runner, "_update_needed", return_value=True):
+                with mock.patch.object(colcon_runner, "_mark_updated"):
+                    buf = io.StringIO()
+                    with contextlib.redirect_stdout(buf):
+                        colcon_runner.main(["ia"])
+
+                    output = buf.getvalue()
+                    self.assertIn("+ sudo apt update", output)
+                    self.assertIn(
+                        "Warning: sudo apt update failed, continuing with rosdep update", output
+                    )
+                    self.assertIn("+ rosdep update", output)
 
 
 class WorkspaceRootTests(unittest.TestCase):
@@ -435,6 +464,44 @@ class WorkspaceRootTests(unittest.TestCase):
         ):
             root = colcon_runner._find_workspace_root()
             self.assertEqual(root, env_workspace)
+
+    def test_find_root_no_defaults_file_no_src_directory(self):
+        """Test ParseError when no defaults file and no src directory found."""
+        # Create an empty temporary directory without src subdirectory
+        temp_dir = tempfile.mkdtemp()
+        self.addCleanup(lambda: os.path.exists(temp_dir) and shutil.rmtree(temp_dir))
+
+        # Mock cwd to be in the temp directory and no environment variables set
+        with mock.patch("os.getcwd", return_value=temp_dir):
+            with mock.patch.dict(os.environ, {}, clear=True):
+                with mock.patch("os.path.expanduser") as mock_expand:
+                    # Make sure no defaults file exists
+                    mock_expand.return_value = "/nonexistent/defaults.yaml"
+
+                    with self.assertRaises(colcon_runner.ParseError) as cm:
+                        colcon_runner._find_workspace_root()
+
+                    # Verify the error message mentions no 'src' directory found
+                    self.assertIn("no 'src' directory found", str(cm.exception))
+
+    def test_find_root_malformed_yaml_falls_back_to_src_search(self):
+        """Test that malformed YAML in defaults file falls back to src directory search."""
+        # Create workspace directory with src subdirectory
+        workspace_dir = os.path.join(self.test_dir, "workspace")
+        src_dir = os.path.join(workspace_dir, "src")
+        os.makedirs(src_dir)
+
+        # Create malformed YAML defaults file
+        defaults_path = os.path.join(self.test_dir, "malformed_defaults.yaml")
+        with open(defaults_path, "w", encoding="utf-8") as f:
+            f.write("base-path: [invalid yaml structure\n")  # Missing closing bracket
+
+        # Mock cwd to be in the workspace and set the malformed defaults file
+        with mock.patch("os.getcwd", return_value=workspace_dir):
+            with mock.patch.dict(os.environ, {"COLCON_DEFAULTS_FILE": defaults_path}):
+                # Should fall back to src directory search and succeed
+                root = colcon_runner._find_workspace_root()
+                self.assertEqual(root, workspace_dir)
 
 
 if __name__ == "__main__":  # pragma: no cover — run the tests

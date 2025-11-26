@@ -121,6 +121,7 @@ import subprocess
 import shlex
 import logging
 import yaml
+import tempfile
 from datetime import datetime
 from typing import Optional, List
 
@@ -151,7 +152,8 @@ logger.addHandler(handler)
 def _get_update_cache_file() -> str:
     """Get the path to today's update cache file (for both apt and rosdep)."""
     today = datetime.now().strftime("%Y-%m-%d")
-    return f"/tmp/colcon_runner_update_{today}"
+    temp_dir = tempfile.gettempdir()
+    return os.path.join(temp_dir, f"colcon_runner_update_{today}")
 
 
 def _update_needed() -> bool:
@@ -184,20 +186,8 @@ def _sanitize_pkg_name(pkg: str) -> str:
     return pkg
 
 
-def _find_workspace_root() -> str:
-    """Find the workspace root.
-
-    Checks COLCON_DEFAULTS_FILE for a 'base-path' entry first.
-    If not found, searches from the current directory upward until finding a directory
-    containing a 'src' subdirectory, similar to how colcon detects workspaces.
-
-    Returns:
-        Absolute path to the workspace root directory.
-
-    Raises:
-        ParseError: If no workspace root is found.
-    """
-    # Determine potential defaults file paths in order of precedence
+def _get_defaults_file_candidates() -> List[str]:
+    """Get ordered list of potential defaults file paths."""
     candidates = []
 
     # 1. Environment variable
@@ -212,65 +202,73 @@ def _find_workspace_root() -> str:
     # 3. ~/.colcon/defaults.yaml (default location)
     candidates.append(os.path.expanduser("~/.colcon/defaults.yaml"))
 
-    # Check candidates in order
-    logger.warning(f"Searching for workspace root. Checking defaults files: {candidates}")
-    for defaults_file in candidates:
-        if os.path.isfile(defaults_file):
-            try:
-                with open(defaults_file, "r", encoding="utf-8") as f:
-                    data = yaml.safe_load(f)
-                    # Check for base-paths (plural) first, which is the more modern approach
-                    if data and "base-paths" in data.get("build", {}):
-                        base_paths = data["build"]["base-paths"]
-                        # Ensure base_paths is a list
-                        if not isinstance(base_paths, list):
-                            base_paths = [base_paths]
+    return candidates
 
-                        # Resolve and validate first valid path
-                        for base_path in base_paths:
-                            # Resolve relative paths relative to the defaults file
-                            if not os.path.isabs(base_path):
-                                base_path = os.path.join(os.path.dirname(defaults_file), base_path)
 
-                            # Ensure the path exists
-                            if os.path.exists(base_path):
-                                logger.warning(
-                                    f"Found workspace root in defaults file: {base_path}"
-                                )
-                                return os.path.abspath(base_path)
-                            logger.warning(f"Specified base-path does not exist: {base_path}")
+def _try_parse_defaults_file(defaults_file: str) -> Optional[str]:
+    """Try to parse a defaults file and return workspace root if found."""
+    if not os.path.isfile(defaults_file):
+        return None
 
-                    # Fallback to base-path (singular) for backward compatibility
-                    if data and "base-path" in data:
-                        base_path = data["base-path"]
-                        # Resolve relative paths relative to the defaults file
-                        if not os.path.isabs(base_path):
-                            base_path = os.path.join(os.path.dirname(defaults_file), base_path)
+    try:
+        with open(defaults_file, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
 
-                        # Ensure the path exists
-                        if os.path.exists(base_path):
-                            logger.warning(f"Found workspace root in defaults file: {base_path}")
-                            return os.path.abspath(base_path)
-                        logger.warning(f"Specified base-path does not exist: {base_path}")
-            except Exception as e:
-                # Log warning but continue to next candidate or fallback
-                logger.warning(f"Failed to parse defaults file '{defaults_file}': {e}")
+            # Check for base-paths (plural) first, which is the more modern approach
+            if data and "base-paths" in data.get("build", {}):
+                base_paths = data["build"]["base-paths"]
+                # Ensure base_paths is a list
+                if not isinstance(base_paths, list):
+                    base_paths = [base_paths]
 
-    # If no base-path is found in defaults, fall back to src directory search
+                # Resolve and validate first valid path
+                for base_path in base_paths:
+                    # Resolve relative paths relative to the defaults file
+                    if not os.path.isabs(base_path):
+                        base_path = os.path.join(os.path.dirname(defaults_file), base_path)
+
+                    # Ensure the path exists
+                    if os.path.exists(base_path):
+                        logger.info(f"Found workspace root in defaults file: {base_path}")
+                        return os.path.abspath(base_path)
+                    logger.debug(f"Specified base-path does not exist: {base_path}")
+
+            # Fallback to base-path (singular) for backward compatibility
+            if data and "base-path" in data:
+                base_path = data["base-path"]
+                # Resolve relative paths relative to the defaults file
+                if not os.path.isabs(base_path):
+                    base_path = os.path.join(os.path.dirname(defaults_file), base_path)
+
+                # Ensure the path exists
+                if os.path.exists(base_path):
+                    logger.info(f"Found workspace root in defaults file: {base_path}")
+                    return os.path.abspath(base_path)
+                logger.debug(f"Specified base-path does not exist: {base_path}")
+
+    except Exception as e:
+        # Log warning but continue to next candidate or fallback
+        logger.warning(f"Failed to parse defaults file '{defaults_file}': {e}")
+
+    return None
+
+
+def _search_for_src_directory() -> str:
+    """Search for workspace root by finding a directory containing 'src'."""
     current = os.path.abspath(os.getcwd())
-    logger.warning(f"Using current directory as base: {current}")
+    logger.debug(f"Using current directory as base: {current}")
 
     # Check if we're inside a src directory
     if os.path.basename(current) == "src":
-        logger.warning(f"Current directory is 'src'. Workspace root: {os.path.dirname(current)}")
+        logger.info(f"Current directory is 'src'. Workspace root: {os.path.dirname(current)}")
         return os.path.dirname(current)
 
     # Search upward for a directory containing 'src'
     while True:
         src_path = os.path.join(current, "src")
-        logger.warning(f"Checking for src directory at: {src_path}")
+        logger.debug(f"Checking for src directory at: {src_path}")
         if os.path.isdir(src_path):
-            logger.warning(f"Found 'src' directory. Workspace root: {current}")
+            logger.info(f"Found 'src' directory. Workspace root: {current}")
             return current
 
         parent = os.path.dirname(current)
@@ -280,6 +278,32 @@ def _find_workspace_root() -> str:
                 f"Could not find workspace root (no 'src' directory found) from {os.path.abspath(os.getcwd())}"
             )
         current = parent
+
+
+def _find_workspace_root() -> str:
+    """Find the workspace root.
+
+    Checks COLCON_DEFAULTS_FILE for a 'base-path' entry first.
+    If not found, searches from the current directory upward until finding a directory
+    containing a 'src' subdirectory, similar to how colcon detects workspaces.
+
+    Returns:
+        Absolute path to the workspace root directory.
+
+    Raises:
+        ParseError: If no workspace root is found.
+    """
+    # Try to find workspace root from defaults files first
+    candidates = _get_defaults_file_candidates()
+    logger.debug(f"Searching for workspace root. Checking defaults files: {candidates}")
+
+    for defaults_file in candidates:
+        workspace_root = _try_parse_defaults_file(defaults_file)
+        if workspace_root:
+            return workspace_root
+
+    # If no base-path is found in defaults, fall back to src directory search
+    return _search_for_src_directory()
 
 
 def _parse_verbs(cmds: str):
@@ -391,18 +415,19 @@ def _build_cmd(tool: str, verb: str, spec: str, pkg: Optional[str]) -> List[str]
     if tool == "rosdep":
         # Find workspace root to build correct paths
         workspace_root = _find_workspace_root()
+        src_dir = os.path.join(workspace_root, "src")
 
         # Determine target path based on spec
         if spec == "a":
-            # Install for all packages in workspace
-            target_path = workspace_root
+            # Install for all packages in workspace (should be workspace_root/src)
+            target_path = src_dir
         elif spec in ("o", "u"):
             # Install only for specific package or package and its dependencies
             if not pkg:
                 spec_name = "only" if spec == "o" else "upto"
                 raise ParseError(f"rosdep '{spec_name}' requires a package name")
             safe_pkg = _sanitize_pkg_name(pkg)
-            target_path = os.path.join(workspace_root, safe_pkg)
+            target_path = os.path.join(src_dir, safe_pkg)
         else:
             raise ParseError(f"unknown specifier '{spec}'")
 
