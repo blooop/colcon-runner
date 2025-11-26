@@ -213,6 +213,7 @@ def _find_workspace_root() -> str:
     candidates.append(os.path.expanduser("~/.colcon/defaults.yaml"))
 
     # Check candidates in order
+    logger.warning(f"Searching for workspace root. Checking defaults files: {candidates}")
     for defaults_file in candidates:
         if os.path.isfile(defaults_file):
             try:
@@ -223,31 +224,32 @@ def _find_workspace_root() -> str:
                         # Handle relative paths relative to the defaults file
                         if not os.path.isabs(base_path):
                             base_path = os.path.join(os.path.dirname(defaults_file), base_path)
+                        logger.warning(f"Found workspace root in defaults file: {base_path}")
                         return os.path.abspath(base_path)
             except Exception as e:
                 # Log warning but continue to next candidate or fallback
                 logger.warning(f"Failed to parse defaults file '{defaults_file}': {e}")
 
-            # If we found a file but it didn't have base-path, should we stop?
-            # The colcon docs imply defaults are merged, but for base-path specifically,
-            # we probably want the first one that defines it.
-            # For now, let's continue searching if not found.
-
     current = os.path.abspath(os.getcwd())
+    logger.warning(f"Using current directory as base: {current}")
 
     # Check if we're inside a src directory
     if os.path.basename(current) == "src":
+        logger.warning(f"Current directory is 'src'. Workspace root: {os.path.dirname(current)}")
         return os.path.dirname(current)
 
     # Search upward for a directory containing 'src'
     while True:
         src_path = os.path.join(current, "src")
+        logger.warning(f"Checking for src directory at: {src_path}")
         if os.path.isdir(src_path):
+            logger.warning(f"Found 'src' directory. Workspace root: {current}")
             return current
 
         parent = os.path.dirname(current)
         if parent == current:  # Reached filesystem root
-            raise ParseError("Could not find workspace root (no 'src' directory found)")
+            logger.warning("No 'src' directory found in current path hierarchy")
+            raise ParseError(f"Could not find workspace root (no 'src' directory found) from {os.path.abspath(os.getcwd())}")
         current = parent
 
 
