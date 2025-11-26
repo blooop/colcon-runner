@@ -148,21 +148,21 @@ handler.setFormatter(ColoredFormatter("%(message)s"))
 logger.addHandler(handler)
 
 
-def _get_rosdep_cache_file() -> str:
-    """Get the path to today's rosdep update cache file."""
+def _get_update_cache_file() -> str:
+    """Get the path to today's update cache file (for both apt and rosdep)."""
     today = datetime.now().strftime("%Y-%m-%d")
-    return f"/tmp/colcon_runner_rosdep_update_{today}"
+    return f"/tmp/colcon_runner_update_{today}"
 
 
-def _rosdep_update_needed() -> bool:
-    """Check if rosdep update needs to be run (hasn't been run today)."""
-    cache_file = _get_rosdep_cache_file()
+def _update_needed() -> bool:
+    """Check if update needs to be run (hasn't been run today)."""
+    cache_file = _get_update_cache_file()
     return not os.path.exists(cache_file)
 
 
-def _mark_rosdep_updated() -> None:
-    """Mark that rosdep update has been run today."""
-    cache_file = _get_rosdep_cache_file()
+def _mark_updated() -> None:
+    """Mark that update has been run today."""
+    cache_file = _get_update_cache_file()
     # Create the cache file
     with open(cache_file, "w", encoding="utf-8") as f:
         f.write(datetime.now().isoformat())
@@ -464,10 +464,16 @@ def main(argv=None) -> None:
         # Determine which tool to use based on verb
         tool = "rosdep" if verb == "i" else "colcon"
 
-        # Run rosdep update before first rosdep install (max once per day)
+        # Run apt update and rosdep update before first rosdep install (max once per day)
         if tool == "rosdep" and not rosdep_updated:
-            if _rosdep_update_needed():
+            if _update_needed():
                 if "--dry-run" not in extra_opts:
+                    # Run apt update first to refresh package lists
+                    print("+ sudo apt update")
+                    ret = subprocess.run(["sudo", "apt", "update"], check=False).returncode
+                    if ret != 0:
+                        print("Warning: sudo apt update failed, continuing with rosdep update")
+
                     print("+ rosdep update")
                     # Suppress DeprecationWarnings for rosdep
                     env = os.environ.copy()
@@ -475,10 +481,12 @@ def main(argv=None) -> None:
                     ret = subprocess.run(["rosdep", "update"], check=False, env=env).returncode
                     if ret != 0:
                         sys.exit(ret)
-                    _mark_rosdep_updated()
+                    _mark_updated()
                 else:
+                    print("+ sudo apt update")
                     print("+ rosdep update")
             else:
+                print("+ sudo apt update (skipped - already run today)")
                 print("+ rosdep update (skipped - already run today)")
             rosdep_updated = True
 

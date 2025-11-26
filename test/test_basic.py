@@ -253,7 +253,7 @@ class IntegrationTests(unittest.TestCase):
             m_sp.run.assert_not_called()
 
 
-class RosdepCacheTests(unittest.TestCase):
+class UpdateCacheTests(unittest.TestCase):
     # pylint: disable=protected-access
     def setUp(self):
         # Mock workspace root detection
@@ -265,8 +265,8 @@ class RosdepCacheTests(unittest.TestCase):
 
     def test_rosdep_cache_file_format(self):
         # Test that cache file has correct date format
-        cache_file = colcon_runner._get_rosdep_cache_file()
-        self.assertIn("/tmp/colcon_runner_rosdep_update_", cache_file)
+        cache_file = colcon_runner._get_update_cache_file()
+        self.assertIn("/tmp/colcon_runner_update_", cache_file)
         # Should end with date in YYYY-MM-DD format
         import re
 
@@ -275,20 +275,20 @@ class RosdepCacheTests(unittest.TestCase):
     def test_rosdep_update_needed_no_cache(self):
         # When cache file doesn't exist, update is needed
         with mock.patch.object(colcon_runner.os.path, "exists", return_value=False):
-            self.assertTrue(colcon_runner._rosdep_update_needed())
+            self.assertTrue(colcon_runner._update_needed())
 
     def test_rosdep_update_not_needed_with_cache(self):
         # When cache file exists, update is not needed
         with mock.patch.object(colcon_runner.os.path, "exists", return_value=True):
-            self.assertFalse(colcon_runner._rosdep_update_needed())
+            self.assertFalse(colcon_runner._update_needed())
 
     def test_rosdep_update_runs_once_then_skipped(self):
         # Test that rosdep update runs first time, then is skipped
         with mock.patch.object(colcon_runner, "subprocess") as m_sp:
             m_sp.run.return_value.returncode = 0
 
-            with mock.patch.object(colcon_runner, "_rosdep_update_needed") as m_update_needed:
-                with mock.patch.object(colcon_runner, "_mark_rosdep_updated"):
+            with mock.patch.object(colcon_runner, "_update_needed") as m_update_needed:
+                with mock.patch.object(colcon_runner, "_mark_updated"):
                     # First call - update is needed
                     m_update_needed.return_value = True
 
@@ -297,6 +297,7 @@ class RosdepCacheTests(unittest.TestCase):
                         colcon_runner.main(["ia", "--dry-run"])
 
                     output = buf.getvalue()
+                    self.assertIn("sudo apt update", output)
                     self.assertIn("rosdep update", output)
                     self.assertNotIn("skipped", output)
 
@@ -308,6 +309,7 @@ class RosdepCacheTests(unittest.TestCase):
                         colcon_runner.main(["ia", "--dry-run"])
 
                     output = buf.getvalue()
+                    self.assertIn("sudo apt update (skipped - already run today)", output)
                     self.assertIn("rosdep update (skipped - already run today)", output)
 
 
