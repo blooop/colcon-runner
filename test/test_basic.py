@@ -99,19 +99,19 @@ class RosdepCommandTests(unittest.TestCase):
     def test_install_all(self):
         cmd = colcon_runner._build_rosdep_cmd("a", None)
         self.assertEqual(
-            cmd, ["install", "--from-paths", "/fake/workspace/src", "--ignore-src", "-y", "-r"]
+            cmd, ["install", "--from-paths", "/fake/workspace", "--ignore-src", "-y", "-r"]
         )
 
     def test_install_only(self):
         cmd = colcon_runner._build_rosdep_cmd("o", "pkg")
         self.assertEqual(
-            cmd, ["install", "--from-paths", "/fake/workspace/src/pkg", "--ignore-src", "-y", "-r"]
+            cmd, ["install", "--from-paths", "/fake/workspace/pkg", "--ignore-src", "-y", "-r"]
         )
 
     def test_install_upto(self):
         cmd = colcon_runner._build_rosdep_cmd("u", "pkg")
         self.assertEqual(
-            cmd, ["install", "--from-paths", "/fake/workspace/src/pkg", "--ignore-src", "-y", "-r"]
+            cmd, ["install", "--from-paths", "/fake/workspace/pkg", "--ignore-src", "-y", "-r"]
         )
 
     def test_missing_pkg_only(self):
@@ -205,9 +205,7 @@ class IntegrationTests(unittest.TestCase):
 
             output = buf.getvalue()
             self.assertIn("rosdep update", output)
-            self.assertIn(
-                "rosdep install --from-paths /test/workspace/src --ignore-src -y -r", output
-            )
+            self.assertIn("rosdep install --from-paths /test/workspace --ignore-src -y -r", output)
 
             # Test install only with package
             buf = io.StringIO()
@@ -217,7 +215,7 @@ class IntegrationTests(unittest.TestCase):
             output = buf.getvalue()
             self.assertIn("rosdep update", output)
             self.assertIn(
-                "rosdep install --from-paths /test/workspace/src/test_pkg --ignore-src -y -r",
+                "rosdep install --from-paths /test/workspace/test_pkg --ignore-src -y -r",
                 output,
             )
 
@@ -314,31 +312,44 @@ class RosdepCacheTests(unittest.TestCase):
 
 
 class WorkspaceRootTests(unittest.TestCase):
+    # pylint: disable=protected-access
     def setUp(self):
         # Create a temporary directory structure
         self.test_dir = tempfile.mkdtemp()
         self.addCleanup(lambda: os.path.exists(self.test_dir) and shutil.rmtree(self.test_dir))
 
     def test_find_root_with_defaults_file(self):
-        # Create a defaults file
+        workspace_dir = os.path.join(self.test_dir, "custom_workspace")
+        os.makedirs(workspace_dir)
         defaults_path = os.path.join(self.test_dir, "defaults.yaml")
-        with open(defaults_path, "w") as f:
-            f.write("base-path: /custom/workspace\n")
+        with open(defaults_path, "w", encoding="utf-8") as f:
+            f.write(f"base-path: {workspace_dir}\n")
 
         with mock.patch.dict(os.environ, {"COLCON_DEFAULTS_FILE": defaults_path}):
             root = colcon_runner._find_workspace_root()
-            self.assertEqual(root, "/custom/workspace")
+            self.assertEqual(root, workspace_dir)
 
     def test_find_root_with_defaults_file_relative_path(self):
-        # Create a defaults file with relative path
+        workspace_dir = os.path.join(self.test_dir, "relative", "workspace")
+        os.makedirs(workspace_dir)
         defaults_path = os.path.join(self.test_dir, "defaults.yaml")
-        with open(defaults_path, "w") as f:
+        with open(defaults_path, "w", encoding="utf-8") as f:
             f.write("base-path: ./relative/workspace\n")
 
         with mock.patch.dict(os.environ, {"COLCON_DEFAULTS_FILE": defaults_path}):
             root = colcon_runner._find_workspace_root()
-            expected = os.path.abspath(os.path.join(self.test_dir, "relative/workspace"))
-            self.assertEqual(root, expected)
+            self.assertEqual(root, workspace_dir)
+
+    def test_find_root_with_base_paths_list(self):
+        defaults_path = os.path.join(self.test_dir, "defaults.yaml")
+        valid_workspace = os.path.join(self.test_dir, "workspace_list", "ws")
+        os.makedirs(valid_workspace)
+        with open(defaults_path, "w", encoding="utf-8") as f:
+            f.write("build:\n  base-paths:\n    - ./nonexistent\n    - ./workspace_list/ws\n")
+
+        with mock.patch.dict(os.environ, {"COLCON_DEFAULTS_FILE": defaults_path}):
+            root = colcon_runner._find_workspace_root()
+            self.assertEqual(root, os.path.abspath(valid_workspace))
 
     def test_find_root_fallback_to_src(self):
         # Create src directory
@@ -348,7 +359,6 @@ class WorkspaceRootTests(unittest.TestCase):
 
         # Ensure no defaults file env var
         with mock.patch.dict(os.environ, {}, clear=True):
-            # Change cwd to test dir
             cwd = os.getcwd()
             try:
                 os.chdir(self.test_dir)
@@ -358,31 +368,34 @@ class WorkspaceRootTests(unittest.TestCase):
                 os.chdir(cwd)
 
     def test_find_root_defaults_file_missing_base_path(self):
-        # Create defaults file without base-path
         defaults_path = os.path.join(self.test_dir, "defaults.yaml")
-        with open(defaults_path, "w") as f:
+        with open(defaults_path, "w", encoding="utf-8") as f:
             f.write("other-key: value\n")
-
         # Create src directory for fallback
         src_dir = os.path.join(self.test_dir, "src")
         os.mkdir(src_dir)
         self.addCleanup(os.rmdir, src_dir)
+        with mock.patch.dict(os.environ, {"COLCON_DEFAULTS_FILE": defaults_path}, clear=True):
+            cwd = os.getcwd()
+            try:
+                os.chdir(self.test_dir)
+                root = colcon_runner._find_workspace_root()
+                self.assertEqual(root, self.test_dir)
+            finally:
+                os.chdir(cwd)
 
     def test_find_root_with_colcon_home(self):
         # Create defaults file in custom COLCON_HOME
         colcon_home = os.path.join(self.test_dir, "custom_home")
         os.makedirs(colcon_home)
         defaults_path = os.path.join(colcon_home, "defaults.yaml")
-        with open(defaults_path, "w") as f:
-            f.write("base-path: /home/workspace\n")
-
-        with mock.patch.dict(os.environ, {"COLCON_HOME": colcon_home}):
-            # Ensure COLCON_DEFAULTS_FILE is not set
-            if "COLCON_DEFAULTS_FILE" in os.environ:
-                del os.environ["COLCON_DEFAULTS_FILE"]
-
+        workspace_dir = os.path.join(self.test_dir, "home_workspace")
+        os.makedirs(workspace_dir)
+        with open(defaults_path, "w", encoding="utf-8") as f:
+            f.write(f"base-path: {workspace_dir}\n")
+        with mock.patch.dict(os.environ, {"COLCON_HOME": colcon_home}, clear=True):
             root = colcon_runner._find_workspace_root()
-            self.assertEqual(root, "/home/workspace")
+            self.assertEqual(root, workspace_dir)
 
     def test_find_root_default_location(self):
         # Mock os.path.expanduser to point to our test dir
@@ -390,33 +403,36 @@ class WorkspaceRootTests(unittest.TestCase):
         fake_colcon_dir = os.path.join(fake_home, ".colcon")
         os.makedirs(fake_colcon_dir)
         defaults_path = os.path.join(fake_colcon_dir, "defaults.yaml")
-        with open(defaults_path, "w") as f:
-            f.write("base-path: /default/workspace\n")
-
+        workspace_dir = os.path.join(self.test_dir, "default_workspace")
+        os.makedirs(workspace_dir)
+        with open(defaults_path, "w", encoding="utf-8") as f:
+            f.write(f"base-path: {workspace_dir}\n")
         with mock.patch("os.path.expanduser", return_value=defaults_path):
             with mock.patch.dict(os.environ, {}, clear=True):
                 root = colcon_runner._find_workspace_root()
-                self.assertEqual(root, "/default/workspace")
+                self.assertEqual(root, workspace_dir)
 
     def test_precedence_env_over_home(self):
         # Setup both env var and COLCON_HOME
         # 1. Env var file
         env_file = os.path.join(self.test_dir, "env_defaults.yaml")
-        with open(env_file, "w") as f:
-            f.write("base-path: /env/workspace\n")
-
+        env_workspace = os.path.join(self.test_dir, "env_workspace")
+        os.makedirs(env_workspace)
+        with open(env_file, "w", encoding="utf-8") as f:
+            f.write(f"base-path: {env_workspace}\n")
         # 2. COLCON_HOME file
         colcon_home = os.path.join(self.test_dir, "colcon_home")
         os.makedirs(colcon_home)
         home_file = os.path.join(colcon_home, "defaults.yaml")
-        with open(home_file, "w") as f:
-            f.write("base-path: /home/workspace\n")
-
+        home_workspace = os.path.join(self.test_dir, "home_workspace")
+        os.makedirs(home_workspace)
+        with open(home_file, "w", encoding="utf-8") as f:
+            f.write(f"base-path: {home_workspace}\n")
         with mock.patch.dict(
             os.environ, {"COLCON_DEFAULTS_FILE": env_file, "COLCON_HOME": colcon_home}
         ):
             root = colcon_runner._find_workspace_root()
-            self.assertEqual(root, "/env/workspace")
+            self.assertEqual(root, env_workspace)
 
 
 if __name__ == "__main__":  # pragma: no cover — run the tests

@@ -234,10 +234,11 @@ def _find_workspace_root() -> str:
 
                             # Ensure the path exists
                             if os.path.exists(base_path):
-                                logger.warning(f"Found workspace root in defaults file: {base_path}")
+                                logger.warning(
+                                    f"Found workspace root in defaults file: {base_path}"
+                                )
                                 return os.path.abspath(base_path)
-                            else:
-                                logger.warning(f"Specified base-path does not exist: {base_path}")
+                            logger.warning(f"Specified base-path does not exist: {base_path}")
 
                     # Fallback to base-path (singular) for backward compatibility
                     if data and "base-path" in data:
@@ -250,8 +251,7 @@ def _find_workspace_root() -> str:
                         if os.path.exists(base_path):
                             logger.warning(f"Found workspace root in defaults file: {base_path}")
                             return os.path.abspath(base_path)
-                        else:
-                            logger.warning(f"Specified base-path does not exist: {base_path}")
+                        logger.warning(f"Specified base-path does not exist: {base_path}")
             except Exception as e:
                 # Log warning but continue to next candidate or fallback
                 logger.warning(f"Failed to parse defaults file '{defaults_file}': {e}")
@@ -276,7 +276,9 @@ def _find_workspace_root() -> str:
         parent = os.path.dirname(current)
         if parent == current:  # Reached filesystem root
             logger.warning("No 'src' directory found in current path hierarchy")
-            raise ParseError(f"Could not find workspace root (no 'src' directory found) from {os.path.abspath(os.getcwd())}")
+            raise ParseError(
+                f"Could not find workspace root (no 'src' directory found) from {os.path.abspath(os.getcwd())}"
+            )
         current = parent
 
 
