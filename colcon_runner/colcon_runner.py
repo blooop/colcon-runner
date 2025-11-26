@@ -219,7 +219,27 @@ def _find_workspace_root() -> str:
             try:
                 with open(defaults_file, "r", encoding="utf-8") as f:
                     data = yaml.safe_load(f)
-                    # Directly return the base-path if it exists, without further searching
+                    # Check for base-paths (plural) first, which is the more modern approach
+                    if data and "base-paths" in data.get("build", {}):
+                        base_paths = data["build"]["base-paths"]
+                        # Ensure base_paths is a list
+                        if not isinstance(base_paths, list):
+                            base_paths = [base_paths]
+
+                        # Resolve and validate first valid path
+                        for base_path in base_paths:
+                            # Resolve relative paths relative to the defaults file
+                            if not os.path.isabs(base_path):
+                                base_path = os.path.join(os.path.dirname(defaults_file), base_path)
+
+                            # Ensure the path exists
+                            if os.path.exists(base_path):
+                                logger.warning(f"Found workspace root in defaults file: {base_path}")
+                                return os.path.abspath(base_path)
+                            else:
+                                logger.warning(f"Specified base-path does not exist: {base_path}")
+
+                    # Fallback to base-path (singular) for backward compatibility
                     if data and "base-path" in data:
                         base_path = data["base-path"]
                         # Resolve relative paths relative to the defaults file
@@ -236,6 +256,7 @@ def _find_workspace_root() -> str:
                 # Log warning but continue to next candidate or fallback
                 logger.warning(f"Failed to parse defaults file '{defaults_file}': {e}")
 
+    # If no base-path is found in defaults, fall back to src directory search
     current = os.path.abspath(os.getcwd())
     logger.warning(f"Using current directory as base: {current}")
 
