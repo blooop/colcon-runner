@@ -273,7 +273,7 @@ def _search_for_src_directory() -> str:
 
         parent = os.path.dirname(current)
         if parent == current:  # Reached filesystem root
-            logger.warning("No 'src' directory found in current path hierarchy")
+            logger.info("No 'src' directory found in current path hierarchy")
             raise ParseError(
                 f"Could not find workspace root (no 'src' directory found) from {os.path.abspath(os.getcwd())}"
             )
@@ -497,7 +497,8 @@ def main(argv=None) -> None:
                     print("+ sudo apt update")
                     ret = subprocess.run(["sudo", "apt", "update"], check=False).returncode
                     if ret != 0:
-                        print("Warning: sudo apt update failed, continuing with rosdep update")
+                        print("Error: 'sudo apt update' failed. This may cause 'rosdep update' or 'rosdep install' to fail or install outdated packages. Aborting.")
+                        sys.exit(ret)
 
                     print("+ rosdep update")
                     # Suppress DeprecationWarnings for rosdep
