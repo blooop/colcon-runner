@@ -219,13 +219,19 @@ def _find_workspace_root() -> str:
             try:
                 with open(defaults_file, "r", encoding="utf-8") as f:
                     data = yaml.safe_load(f)
+                    # Directly return the base-path if it exists, without further searching
                     if data and "base-path" in data:
                         base_path = data["base-path"]
-                        # Handle relative paths relative to the defaults file
+                        # Resolve relative paths relative to the defaults file
                         if not os.path.isabs(base_path):
                             base_path = os.path.join(os.path.dirname(defaults_file), base_path)
-                        logger.warning(f"Found workspace root in defaults file: {base_path}")
-                        return os.path.abspath(base_path)
+
+                        # Ensure the path exists
+                        if os.path.exists(base_path):
+                            logger.warning(f"Found workspace root in defaults file: {base_path}")
+                            return os.path.abspath(base_path)
+                        else:
+                            logger.warning(f"Specified base-path does not exist: {base_path}")
             except Exception as e:
                 # Log warning but continue to next candidate or fallback
                 logger.warning(f"Failed to parse defaults file '{defaults_file}': {e}")
