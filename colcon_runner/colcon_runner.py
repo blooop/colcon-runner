@@ -389,19 +389,18 @@ def _build_cmd(tool: str, verb: str, spec: str, pkg: Optional[str]) -> List[str]
     if tool == "rosdep":
         # Find workspace root to build correct paths
         workspace_root = _find_workspace_root()
-        src_dir = os.path.join(workspace_root, "src")
 
         # Determine target path based on spec
         if spec == "a":
             # Install for all packages in workspace
-            target_path = src_dir
+            target_path = workspace_root
         elif spec in ("o", "u"):
             # Install only for specific package or package and its dependencies
             if not pkg:
                 spec_name = "only" if spec == "o" else "upto"
                 raise ParseError(f"rosdep '{spec_name}' requires a package name")
             safe_pkg = _sanitize_pkg_name(pkg)
-            target_path = os.path.join(src_dir, safe_pkg)
+            target_path = os.path.join(workspace_root, safe_pkg)
         else:
             raise ParseError(f"unknown specifier '{spec}'")
 
