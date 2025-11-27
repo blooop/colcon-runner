@@ -120,6 +120,7 @@ import os
 import subprocess
 import shlex
 import logging
+import yaml
 from datetime import datetime
 from typing import Optional, List
 
@@ -147,21 +148,21 @@ handler.setFormatter(ColoredFormatter("%(message)s"))
 logger.addHandler(handler)
 
 
-def _get_rosdep_cache_file() -> str:
-    """Get the path to today's rosdep update cache file."""
+def _get_update_cache_file() -> str:
+    """Get the path to today's update cache file (for both apt and rosdep)."""
     today = datetime.now().strftime("%Y-%m-%d")
-    return f"/tmp/colcon_runner_rosdep_update_{today}"
+    return f"/tmp/colcon_runner_update_{today}"
 
 
-def _rosdep_update_needed() -> bool:
-    """Check if rosdep update needs to be run (hasn't been run today)."""
-    cache_file = _get_rosdep_cache_file()
+def _update_needed() -> bool:
+    """Check if update needs to be run (hasn't been run today)."""
+    cache_file = _get_update_cache_file()
     return not os.path.exists(cache_file)
 
 
-def _mark_rosdep_updated() -> None:
-    """Mark that rosdep update has been run today."""
-    cache_file = _get_rosdep_cache_file()
+def _mark_updated() -> None:
+    """Mark that update has been run today."""
+    cache_file = _get_update_cache_file()
     # Create the cache file
     with open(cache_file, "w", encoding="utf-8") as f:
         f.write(datetime.now().isoformat())
@@ -184,9 +185,10 @@ def _sanitize_pkg_name(pkg: str) -> str:
 
 
 def _find_workspace_root() -> str:
-    """Find the workspace root by looking for a 'src' directory.
+    """Find the workspace root.
 
-    Searches from the current directory upward until finding a directory
+    Checks COLCON_DEFAULTS_FILE for a 'base-path' entry first.
+    If not found, searches from the current directory upward until finding a directory
     containing a 'src' subdirectory, similar to how colcon detects workspaces.
 
     Returns:
@@ -195,21 +197,88 @@ def _find_workspace_root() -> str:
     Raises:
         ParseError: If no workspace root is found.
     """
+    # Determine potential defaults file paths in order of precedence
+    candidates = []
+
+    # 1. Environment variable
+    if "COLCON_DEFAULTS_FILE" in os.environ:
+        candidates.append(os.environ["COLCON_DEFAULTS_FILE"])
+
+    # 2. $COLCON_HOME/defaults.yaml
+    colcon_home = os.environ.get("COLCON_HOME")
+    if colcon_home:
+        candidates.append(os.path.join(colcon_home, "defaults.yaml"))
+
+    # 3. ~/.colcon/defaults.yaml (default location)
+    candidates.append(os.path.expanduser("~/.colcon/defaults.yaml"))
+
+    # Check candidates in order
+    logger.warning(f"Searching for workspace root. Checking defaults files: {candidates}")
+    for defaults_file in candidates:
+        if os.path.isfile(defaults_file):
+            try:
+                with open(defaults_file, "r", encoding="utf-8") as f:
+                    data = yaml.safe_load(f)
+                    # Check for base-paths (plural) first, which is the more modern approach
+                    if data and "base-paths" in data.get("build", {}):
+                        base_paths = data["build"]["base-paths"]
+                        # Ensure base_paths is a list
+                        if not isinstance(base_paths, list):
+                            base_paths = [base_paths]
+
+                        # Resolve and validate first valid path
+                        for base_path in base_paths:
+                            # Resolve relative paths relative to the defaults file
+                            if not os.path.isabs(base_path):
+                                base_path = os.path.join(os.path.dirname(defaults_file), base_path)
+
+                            # Ensure the path exists
+                            if os.path.exists(base_path):
+                                logger.warning(
+                                    f"Found workspace root in defaults file: {base_path}"
+                                )
+                                return os.path.abspath(base_path)
+                            logger.warning(f"Specified base-path does not exist: {base_path}")
+
+                    # Fallback to base-path (singular) for backward compatibility
+                    if data and "base-path" in data:
+                        base_path = data["base-path"]
+                        # Resolve relative paths relative to the defaults file
+                        if not os.path.isabs(base_path):
+                            base_path = os.path.join(os.path.dirname(defaults_file), base_path)
+
+                        # Ensure the path exists
+                        if os.path.exists(base_path):
+                            logger.warning(f"Found workspace root in defaults file: {base_path}")
+                            return os.path.abspath(base_path)
+                        logger.warning(f"Specified base-path does not exist: {base_path}")
+            except Exception as e:
+                # Log warning but continue to next candidate or fallback
+                logger.warning(f"Failed to parse defaults file '{defaults_file}': {e}")
+
+    # If no base-path is found in defaults, fall back to src directory search
     current = os.path.abspath(os.getcwd())
+    logger.warning(f"Using current directory as base: {current}")
 
     # Check if we're inside a src directory
     if os.path.basename(current) == "src":
+        logger.warning(f"Current directory is 'src'. Workspace root: {os.path.dirname(current)}")
         return os.path.dirname(current)
 
     # Search upward for a directory containing 'src'
     while True:
         src_path = os.path.join(current, "src")
+        logger.warning(f"Checking for src directory at: {src_path}")
         if os.path.isdir(src_path):
+            logger.warning(f"Found 'src' directory. Workspace root: {current}")
             return current
 
         parent = os.path.dirname(current)
         if parent == current:  # Reached filesystem root
-            raise ParseError("Could not find workspace root (no 'src' directory found)")
+            logger.warning("No 'src' directory found in current path hierarchy")
+            raise ParseError(
+                f"Could not find workspace root (no 'src' directory found) from {os.path.abspath(os.getcwd())}"
+            )
         current = parent
 
 
@@ -322,19 +391,18 @@ def _build_cmd(tool: str, verb: str, spec: str, pkg: Optional[str]) -> List[str]
     if tool == "rosdep":
         # Find workspace root to build correct paths
         workspace_root = _find_workspace_root()
-        src_dir = os.path.join(workspace_root, "src")
 
         # Determine target path based on spec
         if spec == "a":
             # Install for all packages in workspace
-            target_path = src_dir
+            target_path = workspace_root
         elif spec in ("o", "u"):
             # Install only for specific package or package and its dependencies
             if not pkg:
                 spec_name = "only" if spec == "o" else "upto"
                 raise ParseError(f"rosdep '{spec_name}' requires a package name")
             safe_pkg = _sanitize_pkg_name(pkg)
-            target_path = os.path.join(src_dir, safe_pkg)
+            target_path = os.path.join(workspace_root, safe_pkg)
         else:
             raise ParseError(f"unknown specifier '{spec}'")
 
@@ -396,10 +464,16 @@ def main(argv=None) -> None:
         # Determine which tool to use based on verb
         tool = "rosdep" if verb == "i" else "colcon"
 
-        # Run rosdep update before first rosdep install (max once per day)
+        # Run apt update and rosdep update before first rosdep install (max once per day)
         if tool == "rosdep" and not rosdep_updated:
-            if _rosdep_update_needed():
+            if _update_needed():
                 if "--dry-run" not in extra_opts:
+                    # Run apt update first to refresh package lists
+                    print("+ sudo apt update")
+                    ret = subprocess.run(["sudo", "apt", "update"], check=False).returncode
+                    if ret != 0:
+                        print("Warning: sudo apt update failed, continuing with rosdep update")
+
                     print("+ rosdep update")
                     # Suppress DeprecationWarnings for rosdep
                     env = os.environ.copy()
@@ -407,10 +481,12 @@ def main(argv=None) -> None:
                     ret = subprocess.run(["rosdep", "update"], check=False, env=env).returncode
                     if ret != 0:
                         sys.exit(ret)
-                    _mark_rosdep_updated()
+                    _mark_updated()
                 else:
+                    print("+ sudo apt update")
                     print("+ rosdep update")
             else:
+                print("+ sudo apt update (skipped - already run today)")
                 print("+ rosdep update (skipped - already run today)")
             rosdep_updated = True
 

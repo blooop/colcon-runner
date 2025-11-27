@@ -364,8 +364,8 @@ packages:
   requires_python: '>=3.8'
 - pypi: ./
   name: colcon-runner
-  version: 0.4.0
-  sha256: 18b01fc6494f1c2f82a0f31c27a348832e7a95a1155258e912e84e5e7d703102
+  version: 0.6.0
+  sha256: 6211bccf24ae28f7d67b7d69b86620ff8f5eb118a9d0e3699844d9b3b4bb4b70
   requires_dist:
   - pylint>=3.2.5,<=4.0.2 ; extra == 'test'
   - pytest-cov>=4.1,<=7.0.0 ; extra == 'test'
