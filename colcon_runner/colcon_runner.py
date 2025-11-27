@@ -497,8 +497,7 @@ def main(argv=None) -> None:
                     print("+ sudo apt update")
                     ret = subprocess.run(["sudo", "apt", "update"], check=False).returncode
                     if ret != 0:
-                        print("Error: 'sudo apt update' failed. This may cause 'rosdep update' or 'rosdep install' to fail or install outdated packages. Aborting.")
-                        sys.exit(ret)
+                        print("Warning: sudo apt update failed, continuing with rosdep update")
 
                     print("+ rosdep update")
                     # Suppress DeprecationWarnings for rosdep
