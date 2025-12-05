@@ -340,32 +340,11 @@ def _source_bash_file(source_path: str, description: str) -> bool:
         logger.warning(f"Error sourcing {description}: {e}")
         return False
 
-def _reset_ros_environment() -> bool:
-    """Reset ROS environment paths after cleaning workspace.
-
-    Returns:
-        bool: True if any source was attempted, False otherwise.
-    """
-    sources_attempted = False
-    try:
-        # Attempt to source ROS system setup
-        ros_distro = os.environ.get("ROS_DISTRO")
-        if ros_distro:
-            setup_path = f"/opt/ros/{ros_distro}/setup.bash"
-            sources_attempted |= _source_bash_file(setup_path, "ROS system setup")
-
-        # Always attempt to source user's bashrc
-        bashrc_path = os.path.expanduser("~/.bashrc")
-        sources_attempted |= _source_bash_file(bashrc_path, "user bashrc")
-
-        return sources_attempted
-    except Exception as e:
-        logger.warning(f"Error resetting ROS environment: {e}")
-        return False
-    finally:
-        # Always reset environment variables ONCE
-        os.environ["AMENT_PREFIX_PATH"] = ""
-        os.environ["CMAKE_PREFIX_PATH"] = ""
+def _reset_ros_environment() -> None:
+    """Reset ROS environment paths after cleaning workspace."""
+    # Always reset environment variables
+    os.environ["AMENT_PREFIX_PATH"] = ""
+    os.environ["CMAKE_PREFIX_PATH"] = ""
 
 
 def _build_colcon_cmd(verb, spec, pkg):
@@ -472,6 +451,7 @@ def _run_tool(tool: str, args: List[str], extra_opts: List[str]) -> None:
             _reset_ros_environment()
         elif "build" in safe_args:
             # Source workspace setup after build
+            _reset_ros_environment()
             _source_workspace_setup()
 
 
