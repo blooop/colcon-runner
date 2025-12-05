@@ -465,9 +465,14 @@ def _run_tool(tool: str, args: List[str], extra_opts: List[str]) -> None:
     if ret != 0:
         sys.exit(ret)
 
-    # If this was a build command, try to source workspace setup
-    if tool == "colcon" and "build" in safe_args:
-        _source_workspace_setup()
+    # After clean or build operations, perform environment setup
+    if tool == "colcon":
+        if "clean" in safe_args:
+            # Reset ROS environment after clean
+            _reset_ros_environment()
+        elif "build" in safe_args:
+            # Source workspace setup after build
+            _source_workspace_setup()
 
 
 def _build_cmd(tool: str, verb: str, spec: str, pkg: Optional[str]) -> List[str]:
