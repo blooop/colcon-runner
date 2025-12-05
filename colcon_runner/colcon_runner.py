@@ -340,11 +340,22 @@ def _source_bash_file(source_path: str, description: str) -> bool:
         logger.warning(f"Error sourcing {description}: {e}")
         return False
 
+def _prune_missing_prefix_paths() -> None:
+    """Remove non-existent entries from AMENT/CMAKE prefix variables."""
+    for key in ("AMENT_PREFIX_PATH", "CMAKE_PREFIX_PATH"):
+        value = os.environ.get(key)
+        if not value:
+            continue
+        parts = [p for p in value.split(os.pathsep) if p]
+        valid_parts = [p for p in parts if os.path.exists(p)]
+        if valid_parts:
+            os.environ[key] = os.pathsep.join(valid_parts)
+        else:
+            os.environ.pop(key, None)
+
 def _reset_ros_environment() -> None:
-    """Reset ROS environment paths after cleaning workspace."""
-    # Always reset environment variables
-    os.environ["AMENT_PREFIX_PATH"] = ""
-    os.environ["CMAKE_PREFIX_PATH"] = ""
+    """Prune stale ROS prefix paths after cleaning workspace."""
+    _prune_missing_prefix_paths()
 
 
 def _build_colcon_cmd(verb, spec, pkg):
@@ -353,9 +364,6 @@ def _build_colcon_cmd(verb, spec, pkg):
     elif verb == "t":
         args = ["test"]
     elif verb == "c":
-        # Attempt environment reset before clean
-        if not _reset_ros_environment():
-            logger.warning("Failed to reset ROS environment paths")
         args = [
             "clean",
             "workspace",
@@ -447,12 +455,12 @@ def _run_tool(tool: str, args: List[str], extra_opts: List[str]) -> None:
     # After clean or build operations, perform environment setup
     if tool == "colcon":
         if "clean" in safe_args:
-            # Reset ROS environment after clean
+            # Reset ROS environment after clean to avoid stale prefixes
             _reset_ros_environment()
         elif "build" in safe_args:
             # Source workspace setup after build
-            _reset_ros_environment()
-            _source_workspace_setup()
+            if not _source_workspace_setup():
+                logger.warning("Workspace setup.bash not sourced; prefixes may be missing")
 
 
 def _build_cmd(tool: str, verb: str, spec: str, pkg: Optional[str]) -> List[str]:

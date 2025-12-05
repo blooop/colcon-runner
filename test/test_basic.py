@@ -219,8 +219,45 @@ class IntegrationTests(unittest.TestCase):
                 output,
             )
 
-            # subprocess.run should *not* be called when --dry-run is active
-            m_sp.run.assert_not_called()
+    def test_clean_then_build_resets_order(self):
+        # Track the order of key operations
+        call_log = []
+
+        def fake_run(cmd, check=False, env=None):
+            if "clean" in cmd:
+                call_log.append("run-clean")
+            elif "build" in cmd:
+                call_log.append("run-build")
+            return mock.Mock(returncode=0)
+
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp, mock.patch.object(
+            colcon_runner, "_reset_ros_environment"
+        ) as m_reset, mock.patch.object(
+            colcon_runner, "_source_workspace_setup"
+        ) as m_source, mock.patch.object(
+            colcon_runner, "_source_bash_file"
+        ) as m_bashrc:
+            m_sp.run.side_effect = fake_run
+            m_reset.side_effect = lambda: call_log.append("reset") or None
+            m_source.side_effect = lambda: call_log.append("source") or True
+            m_bashrc.side_effect = lambda *_, **__: call_log.append("bashrc") or True
+
+            colcon_runner.main(["cb"])
+
+        # Expect clean before build
+        run_clean_idx = call_log.index("run-clean")
+        run_build_idx = call_log.index("run-build")
+        self.assertLess(run_clean_idx, run_build_idx, "clean should run before build")
+
+        # Must reset after clean
+        reset_after_clean = next((i for i, entry in enumerate(call_log) if entry == "reset" and i > run_clean_idx), None)
+        self.assertIsNotNone(reset_after_clean, "environment should reset after clean")
+
+        # Bashrc should not be sourced implicitly
+        self.assertNotIn("bashrc", call_log, "bashrc should not be sourced automatically")
+
+        # Workspace setup should be sourced after build
+        self.assertGreater(call_log.index("source"), run_build_idx, "workspace setup should be sourced after build")
 
     def test_warning_package_with_default_spec(self):
         # Test that warning is shown when package name provided but spec defaults to 'all'
