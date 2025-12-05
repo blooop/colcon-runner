@@ -306,6 +306,40 @@ def _parse_verbs(cmds: str):
     return result
 
 
+def _source_bash_file(source_path: str, description: str) -> bool:
+    """Source a bash file and update the environment.
+
+    Args:
+        source_path (str): Path to the bash file to source
+        description (str): Description of the file for logging
+
+    Returns:
+        bool: True if sourcing was successful, False otherwise
+    """
+    try:
+        if not os.path.exists(source_path):
+            print(f"+ {description} not found at {source_path}")
+            return False
+
+        print(f"+ Sourcing {description} from {source_path}")
+        env = os.environ.copy()
+        completed = subprocess.run(
+            ["bash", "-c", f"source {source_path} && env"],
+            capture_output=True, text=True, env=env
+        )
+        if completed.returncode == 0:
+            # Update environment with new variables
+            for line in completed.stdout.splitlines():
+                key, value = line.split('=', 1)
+                os.environ[key] = value
+            return True
+        else:
+            print(f"+ Failed to source {description}: {completed.stderr}")
+            return False
+    except Exception as e:
+        logger.warning(f"Error sourcing {description}: {e}")
+        return False
+
 def _reset_ros_environment() -> bool:
     """Reset ROS environment paths after cleaning workspace.
 
@@ -318,19 +352,11 @@ def _reset_ros_environment() -> bool:
         ros_distro = os.environ.get("ROS_DISTRO")
         if ros_distro:
             setup_path = f"/opt/ros/{ros_distro}/setup.bash"
-            if os.path.exists(setup_path):
-                print(f"+ Found ROS system setup at {setup_path}")
-                sources_attempted = True
-            else:
-                print(f"+ ROS system setup not found at {setup_path}")
+            sources_attempted |= _source_bash_file(setup_path, "ROS system setup")
 
         # Always attempt to source user's bashrc
         bashrc_path = os.path.expanduser("~/.bashrc")
-        if os.path.exists(bashrc_path):
-            print(f"+ Found user bashrc at {bashrc_path}")
-            sources_attempted = True
-        else:
-            print(f"+ User bashrc not found at {bashrc_path}")
+        sources_attempted |= _source_bash_file(bashrc_path, "user bashrc")
 
         return sources_attempted
     except Exception as e:
@@ -405,6 +431,21 @@ def get_pkg(override: Optional[str]) -> str:
     return None
 
 
+def _source_workspace_setup() -> bool:
+    """Source the workspace's install/setup.bash if it exists.
+
+    Returns:
+        bool: True if sourcing was successful, False otherwise.
+    """
+    try:
+        # Find the workspace root
+        workspace_root = _find_workspace_root()
+        setup_path = os.path.join(workspace_root, "install", "setup.bash")
+        return _source_bash_file(setup_path, "workspace setup")
+    except Exception as e:
+        logger.warning(f"Error sourcing workspace setup: {e}")
+        return False
+
 def _run_tool(tool: str, args: List[str], extra_opts: List[str]) -> None:
     """Run a tool (colcon or rosdep) with the given arguments."""
     # Defensive: ensure all args are strings and not user-controlled shell input
@@ -423,6 +464,10 @@ def _run_tool(tool: str, args: List[str], extra_opts: List[str]) -> None:
     ret = subprocess.run(cmd, check=False, env=env).returncode
     if ret != 0:
         sys.exit(ret)
+
+    # If this was a build command, try to source workspace setup
+    if tool == "colcon" and "build" in safe_args:
+        _source_workspace_setup()
 
 
 def _build_cmd(tool: str, verb: str, spec: str, pkg: Optional[str]) -> List[str]:
