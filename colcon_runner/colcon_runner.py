@@ -306,12 +306,51 @@ def _parse_verbs(cmds: str):
     return result
 
 
+def _reset_ros_environment() -> bool:
+    """Reset ROS environment paths after cleaning workspace.
+
+    Returns:
+        bool: True if any source was attempted, False otherwise.
+    """
+    sources_attempted = False
+    try:
+        # Attempt to source ROS system setup
+        ros_distro = os.environ.get("ROS_DISTRO")
+        if ros_distro:
+            setup_path = f"/opt/ros/{ros_distro}/setup.bash"
+            if os.path.exists(setup_path):
+                print(f"+ Found ROS system setup at {setup_path}")
+                sources_attempted = True
+            else:
+                print(f"+ ROS system setup not found at {setup_path}")
+
+        # Always attempt to source user's bashrc
+        bashrc_path = os.path.expanduser("~/.bashrc")
+        if os.path.exists(bashrc_path):
+            print(f"+ Found user bashrc at {bashrc_path}")
+            sources_attempted = True
+        else:
+            print(f"+ User bashrc not found at {bashrc_path}")
+
+        return sources_attempted
+    except Exception as e:
+        logger.warning(f"Error resetting ROS environment: {e}")
+        return False
+    finally:
+        # Always reset environment variables ONCE
+        os.environ["AMENT_PREFIX_PATH"] = ""
+        os.environ["CMAKE_PREFIX_PATH"] = ""
+
+
 def _build_colcon_cmd(verb, spec, pkg):
     if verb == "b":
         args = ["build"]
     elif verb == "t":
         args = ["test"]
     elif verb == "c":
+        # Attempt environment reset before clean
+        if not _reset_ros_environment():
+            logger.warning("Failed to reset ROS environment paths")
         args = [
             "clean",
             "workspace",
