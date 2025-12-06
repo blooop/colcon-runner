@@ -34,6 +34,8 @@ python = "3.13.*"
 
 [tool.pixi.pypi-dependencies]
 colcon-runner = { path = ".", editable = true }
+
+[tool.pixi.feature.test.pypi-dependencies]
 colcon-common-extensions = ">=0.3.0"
 colcon-clean = ">=0.2.1"
 rosdep = ">=0.24"

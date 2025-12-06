@@ -405,8 +405,11 @@ def print_source_command() -> None:
     # Print the source command appropriate for the shell
     if shell_name == "fish":
         print(f"source {install_path}")
+    elif shell_name == "sh":
+        # POSIX sh requires '.' instead of 'source'
+        print(f". {install_path}")
     else:
-        # For bash, zsh, sh - they all use 'source' or '.'
+        # For bash, zsh - they support 'source'
         print(f"source {install_path}")
 
 

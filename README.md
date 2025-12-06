@@ -73,7 +73,7 @@ For convenience, you can add this function to your `~/.bashrc` or `~/.zshrc` to 
 function cr() {
     command cr "$@"
     local exit_code=$?
-    # If the command was a build and it succeeded, offer to source
+    # If the command was a build and it succeeded, auto-source the workspace
     if [[ $exit_code -eq 0 && "$1" == *"b"* ]]; then
         eval $(command cr e 2>/dev/null)
     fi

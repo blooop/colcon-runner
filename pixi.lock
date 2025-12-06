@@ -1240,7 +1240,7 @@ packages:
 - pypi: ./
   name: colcon-runner
   version: 0.6.0
-  sha256: afced33af2e97f39baa44e0e9aef57b96b75af156e79162860b71c777911226f
+  sha256: 1cf6093b6f4a65373bbc892d1fad07c568af2ba756d02649920d9ba7c369c892
   requires_dist:
   - pylint>=3.2.5,<=4.0.4 ; extra == 'test'
   - pytest-cov>=4.1,<=7.0.0 ; extra == 'test'
