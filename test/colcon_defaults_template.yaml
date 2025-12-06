@@ -1,0 +1,30 @@
+# Template colcon defaults used by integration tests.
+# The placeholder {workspace} is replaced at test time with the temp workspace root.
+build:
+  symlink-install: true
+  base-paths: ["{workspace}/src"]
+  build-base: "{workspace}/build"
+  install-base: "{workspace}/install"
+  cmake-args:
+    - "-DCMAKE_BUILD_TYPE=RelWithDebInfo"
+    - "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+
+test:
+  build-base: "{workspace}/build"
+  install-base: "{workspace}/install"
+  log-base: "{workspace}/log"
+  event-handlers: ["console_direct+"]
+
+test-result:
+  test-result-base: "{workspace}/build"
+
+clean.workspace:
+  "yes": true
+  base-select: ["build", "install", "log", "test_result"]
+  build-base: "{workspace}/build"
+  install-base: "{workspace}/install"
+  log-base: "{workspace}/log"
+  test-result-base: "{workspace}/build"
+
+"":
+  log-base: "{workspace}/log"

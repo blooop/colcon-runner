@@ -34,6 +34,11 @@ python = "3.13.*"
 
 [tool.pixi.pypi-dependencies]
 colcon-runner = { path = ".", editable = true }
+colcon-common-extensions = ">=0.3.0"
+colcon-clean = ">=0.2.1"
+rosdep = ">=0.24"
+rosdistro = ">=0.9"
+vcstool = ">=0.3.0"
 
 [project.optional-dependencies]
 test = [
@@ -55,11 +60,20 @@ include = ["colcon_runner"]
 
 # Environments
 [tool.pixi.environments]
-default = { features = ["test"], solve-group = "default" }
-py310 = ["py310", "test"]
-py311 = ["py311", "test"]
-py312 = ["py312", "test"]
-py313 = ["py313", "test"]
+default = { features = ["test", "ros_jazzy"], solve-group = "default" }
+py310 = ["py310", "test", "ros_jazzy"]
+py311 = ["py311", "test", "ros_jazzy"]
+py312 = ["py312", "test", "ros_jazzy"]
+py313 = ["py313", "test", "ros_jazzy"]
+ros-jazzy = { features = ["ros_jazzy", "test"], solve-group = "ros-jazzy" }
+
+[tool.pixi.feature.ros_jazzy.dependencies]
+python = ">=3.10"
+cmake = ">=3.26"
+make = "*"
+pkg-config = "*"
+gtest = ">=1.14"
+colcon-core = ">=0.20.1"
 
 
 [tool.pixi.tasks]
@@ -115,3 +129,7 @@ exclude_also = [
   "pass",
   "(_):",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+norecursedirs = ["ros_ws"]

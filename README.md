@@ -21,6 +21,13 @@ You can install colcon-runner using pip:
 pip install colcon-runner
 ```
 
+## ROS Jazzy pixi workspace
+
+- A Pixi environment named `ros-jazzy` installs `colcon` + `colcon-clean`, build tools, and ROS metadata packages. Enter it with `pixi shell -e ros-jazzy` (and export `ROS_DISTRO=jazzy` if you want it in your environment) or run tasks using `pixi run -e ros-jazzy <cmd>`.
+- A minimal workspace lives in `ros_ws` with two packages: `jazzy_py_demo` (Python, pytest) and `jazzy_cpp_demo` (C++/CMake with GTest). Both are discoverable by `colcon build/test`.
+- From the workspace root you can exercise the runner end-to-end: `cr c` (clean), `cr b` (build), `cr t` (test). Use `--dry-run` to inspect generated colcon commands without executing them.
+- The integration test `test/test_ros_workspace_integration.py` copies `ros_ws` to a temp dir and verifies build/test/clean using `cr`.
+
 ```
 CR(1)                         User Commands                        CR(1)
 
