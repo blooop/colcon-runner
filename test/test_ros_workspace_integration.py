@@ -34,9 +34,7 @@ def _prepare_env(tmp_path):
 
 
 def _write_defaults(workspace: Path, tmp_path: Path) -> Path:
-    defaults_text = DEFAULTS_TEMPLATE.read_text(encoding="utf-8").format(
-        workspace=str(workspace)
-    )
+    defaults_text = DEFAULTS_TEMPLATE.read_text(encoding="utf-8").format(workspace=str(workspace))
     defaults_path = tmp_path / "colcon_defaults.yaml"
     defaults_path.write_text(defaults_text, encoding="utf-8")
     return defaults_path
@@ -150,7 +148,9 @@ def test_workspace_sourcing_after_build(tmp_path):
             f"stderr:\n{result.stderr}"
         )
 
-    assert "Hello, test!" in result.stdout, "Package import and execution should work after sourcing"
+    assert "Hello, test!" in result.stdout, (
+        "Package import and execution should work after sourcing"
+    )
 
 
 def test_cr_env_command(tmp_path):
@@ -166,16 +166,16 @@ def test_cr_env_command(tmp_path):
 
     # Run 'cr e' to get the source command
     cmd = [sys.executable, "-m", "colcon_runner.colcon_runner", "e"]
-    result = subprocess.run(
-        cmd, cwd=workspace, env=env, capture_output=True, text=True, check=True
-    )
+    result = subprocess.run(cmd, cwd=workspace, env=env, capture_output=True, text=True, check=True)
 
     # Verify the output contains a source command
     assert "source" in result.stdout.lower(), "Output should contain 'source' command"
-    assert "setup.bash" in result.stdout or "setup.zsh" in result.stdout or "setup.sh" in result.stdout, \
-        "Output should reference a setup file"
-    assert str(workspace / "install") in result.stdout, \
+    assert (
+        "setup.bash" in result.stdout or "setup.zsh" in result.stdout or "setup.sh" in result.stdout
+    ), "Output should reference a setup file"
+    assert str(workspace / "install") in result.stdout, (
         f"Output should reference the install directory: {result.stdout}"
+    )
 
 
 def test_cr_env_with_eval(tmp_path):
@@ -195,9 +195,9 @@ def test_cr_env_with_eval(tmp_path):
     test_script.write_text(
         f"""#!/bin/bash
 set -e
-export COLCON_DEFAULTS_FILE="{env['COLCON_DEFAULTS_FILE']}"
-export HOME="{env['HOME']}"
-export ROS_DISTRO="{env['ROS_DISTRO']}"
+export COLCON_DEFAULTS_FILE="{env["COLCON_DEFAULTS_FILE"]}"
+export HOME="{env["HOME"]}"
+export ROS_DISTRO="{env["ROS_DISTRO"]}"
 cd {workspace}
 eval $({cr_cmd} e 2>/dev/null)
 python3 -c "import jazzy_py_demo; from jazzy_py_demo.talker import compose_greeting; print(compose_greeting('test'))"
@@ -214,13 +214,10 @@ python3 -c "import jazzy_py_demo; from jazzy_py_demo.talker import compose_greet
 
     if result.returncode != 0:
         raise AssertionError(
-            f"eval $(cr e) test failed\n"
-            f"stdout:\n{result.stdout}\n"
-            f"stderr:\n{result.stderr}"
+            f"eval $(cr e) test failed\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
         )
 
-    assert "Hello, test!" in result.stdout, \
-        "Should be able to import packages after eval $(cr e)"
+    assert "Hello, test!" in result.stdout, "Should be able to import packages after eval $(cr e)"
 
 
 def test_cr_env_without_build(tmp_path):
@@ -239,7 +236,7 @@ def test_cr_env_without_build(tmp_path):
 
     # Should fail with a helpful error
     assert result.returncode != 0, "Should fail when workspace is not built"
-    assert "not built" in result.stderr.lower() or "not found" in result.stderr.lower(), \
+    assert "not built" in result.stderr.lower() or "not found" in result.stderr.lower(), (
         f"Error message should mention workspace not built: {result.stderr}"
-    assert "cr b" in result.stderr, \
-        f"Error should suggest running 'cr b': {result.stderr}"
+    )
+    assert "cr b" in result.stderr, f"Error should suggest running 'cr b': {result.stderr}"
