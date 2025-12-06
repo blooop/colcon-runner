@@ -7,6 +7,8 @@ NAME
 
 SYNOPSIS
     cr VERB [PKG] [OPTIONS]
+    cr --help | -h
+    cr --version | -v
 
 DESCRIPTION
     A minimal wrapper around colcon providing short, mnemonic commands
@@ -20,6 +22,7 @@ VERBS
     t       Test packages.
     c       clean packages.
     i       install dependencies using rosdep.
+    e       env - print shell command to source the workspace.
 
 SPECIFIER
     o       only (--packages-select)
@@ -79,6 +82,11 @@ USAGE EXAMPLES
     cr iu pkg_1
         Install dependencies for 'pkg_1' and its dependencies.
 
+    cr e
+        Print shell command to source the workspace.
+        Use with: eval $(cr e)
+        This sources the workspace in your current shell.
+
   Compound Commands:
     cr s pkg1
         Set 'pkg_1' as the default package for subsequent commands.
@@ -123,6 +131,7 @@ import logging
 import yaml
 from datetime import datetime
 from typing import Optional, List
+from importlib.metadata import version, PackageNotFoundError
 
 PKG_FILE: str = os.path.expanduser("~/.colcon_shortcuts_pkg")
 
@@ -287,11 +296,11 @@ def _parse_verbs(cmds: str):
     result = []
     i = 0
     while i < len(cmds):
-        if cmds[i] not in ("s", "b", "t", "c", "i"):
+        if cmds[i] not in ("s", "b", "t", "c", "i", "e"):
             raise ParseError(f"unknown command letter '{cmds[i]}'")
 
         verb = cmds[i]
-        if verb == "s":
+        if verb in ("s", "e"):
             result.append((verb, None))
             i += 1
             continue
@@ -350,6 +359,58 @@ def save_default_pkg(pkg: str) -> None:
     with open(PKG_FILE, "w", encoding="utf-8") as f:
         f.write(pkg)
     print(f"Default package set to '{pkg}'")
+
+
+def print_source_command() -> None:
+    """Print the command to source the workspace for the current shell.
+
+    This allows users to run: eval $(cr e)
+    to source their workspace in the current shell.
+    """
+    try:
+        workspace_root = _find_workspace_root()
+    except ParseError as e:
+        error(str(e))
+        return
+
+    # The workspace root might point to the src directory in base-paths
+    # We need to find the actual workspace root (parent of src) where install/ is located
+    # Check if workspace_root ends with /src
+    if os.path.basename(workspace_root) == "src":
+        workspace_root = os.path.dirname(workspace_root)
+
+    # Determine shell from SHELL environment variable
+    shell = os.environ.get("SHELL", "/bin/bash")
+    shell_name = os.path.basename(shell)
+
+    # Map shell to appropriate setup file
+    setup_file_map = {
+        "bash": "setup.bash",
+        "zsh": "setup.zsh",
+        "sh": "setup.sh",
+        "fish": "setup.fish",
+    }
+
+    setup_file_name = setup_file_map.get(shell_name, "setup.bash")
+    install_path = os.path.join(workspace_root, "install", setup_file_name)
+
+    # Check if install directory exists
+    if not os.path.exists(install_path):
+        error(
+            f"Workspace not built yet. Setup file not found: {install_path}\n"
+            f"Run 'cr b' to build the workspace first."
+        )
+        return
+
+    # Print the source command appropriate for the shell
+    if shell_name == "fish":
+        print(f"source {install_path}")
+    elif shell_name == "sh":
+        # POSIX sh requires '.' instead of 'source'
+        print(f". {install_path}")
+    else:
+        # For bash, zsh - they support 'source'
+        print(f"source {install_path}")
 
 
 def error(msg: str) -> None:
@@ -434,6 +495,15 @@ def main(argv=None) -> None:
         print(__doc__)
         sys.exit(0)
 
+    # Add --version support
+    if argv[0] in ("--version", "-v"):
+        try:
+            pkg_version = version("colcon-runner")
+            print(f"cr (colcon-runner) version {pkg_version}")
+        except PackageNotFoundError:
+            print("cr (colcon-runner) version unknown (not installed)")
+        sys.exit(0)
+
     cmds: str = argv[0]
     rest: List[str] = argv[1:]
 
@@ -459,6 +529,12 @@ def main(argv=None) -> None:
                 error("'s' requires a package name")
             save_default_pkg(override_pkg)
             # do not run any tool for 's'
+            continue
+
+        if verb == "e":
+            # print source command for shell integration
+            print_source_command()
+            # do not run any tool for 'e'
             continue
 
         # Determine which tool to use based on verb

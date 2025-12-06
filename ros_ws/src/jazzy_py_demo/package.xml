@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>jazzy_py_demo</name>
+  <version>0.0.1</version>
+  <description>Example Python package for the pixi-managed ROS Jazzy workspace.</description>
+  <maintainer email="dev@example.com">Colcon Runner</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>cmake</buildtool_depend>
+
+  <test_depend>pytest</test_depend>
+
+  <export>
+    <build_type>cmake</build_type>
+  </export>
+</package>
