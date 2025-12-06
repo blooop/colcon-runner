@@ -437,5 +437,31 @@ class WorkspaceRootTests(unittest.TestCase):
             self.assertEqual(root, env_workspace)
 
 
+class VersionTests(unittest.TestCase):
+    def test_version_flag(self):
+        # Test --version flag
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            with self.assertRaises(SystemExit) as cm:
+                colcon_runner.main(["--version"])
+
+        self.assertEqual(cm.exception.code, 0)
+        output = buf.getvalue()
+        self.assertIn("cr (colcon-runner) version", output)
+        self.assertIn("0.6.0", output)
+
+    def test_version_short_flag(self):
+        # Test -v flag
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            with self.assertRaises(SystemExit) as cm:
+                colcon_runner.main(["-v"])
+
+        self.assertEqual(cm.exception.code, 0)
+        output = buf.getvalue()
+        self.assertIn("cr (colcon-runner) version", output)
+        self.assertIn("0.6.0", output)
+
+
 if __name__ == "__main__":  # pragma: no cover — run the tests
     unittest.main(verbosity=2)

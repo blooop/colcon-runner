@@ -7,6 +7,8 @@ NAME
 
 SYNOPSIS
     cr VERB [PKG] [OPTIONS]
+    cr --help | -h
+    cr --version | -v
 
 DESCRIPTION
     A minimal wrapper around colcon providing short, mnemonic commands
@@ -129,6 +131,7 @@ import logging
 import yaml
 from datetime import datetime
 from typing import Optional, List
+from importlib.metadata import version, PackageNotFoundError
 
 PKG_FILE: str = os.path.expanduser("~/.colcon_shortcuts_pkg")
 
@@ -487,6 +490,15 @@ def main(argv=None) -> None:
     # Add --help and -h support
     if argv[0] in ("--help", "-h"):
         print(__doc__)
+        sys.exit(0)
+
+    # Add --version support
+    if argv[0] in ("--version", "-v"):
+        try:
+            pkg_version = version("colcon-runner")
+            print(f"cr (colcon-runner) version {pkg_version}")
+        except PackageNotFoundError:
+            print("cr (colcon-runner) version unknown (not installed)")
         sys.exit(0)
 
     cmds: str = argv[0]
