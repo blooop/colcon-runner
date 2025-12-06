@@ -148,9 +148,9 @@ def test_workspace_sourcing_after_build(tmp_path):
             f"stderr:\n{result.stderr}"
         )
 
-    assert "Hello, test!" in result.stdout, (
-        "Package import and execution should work after sourcing"
-    )
+    assert (
+        "Hello, test!" in result.stdout
+    ), "Package import and execution should work after sourcing"
 
 
 def test_cr_env_command(tmp_path):
@@ -173,9 +173,9 @@ def test_cr_env_command(tmp_path):
     assert (
         "setup.bash" in result.stdout or "setup.zsh" in result.stdout or "setup.sh" in result.stdout
     ), "Output should reference a setup file"
-    assert str(workspace / "install") in result.stdout, (
-        f"Output should reference the install directory: {result.stdout}"
-    )
+    assert (
+        str(workspace / "install") in result.stdout
+    ), f"Output should reference the install directory: {result.stdout}"
 
 
 def test_cr_env_with_eval(tmp_path):
@@ -236,7 +236,7 @@ def test_cr_env_without_build(tmp_path):
 
     # Should fail with a helpful error
     assert result.returncode != 0, "Should fail when workspace is not built"
-    assert "not built" in result.stderr.lower() or "not found" in result.stderr.lower(), (
-        f"Error message should mention workspace not built: {result.stderr}"
-    )
+    assert (
+        "not built" in result.stderr.lower() or "not found" in result.stderr.lower()
+    ), f"Error message should mention workspace not built: {result.stderr}"
     assert "cr b" in result.stderr, f"Error should suggest running 'cr b': {result.stderr}"
