@@ -21,76 +21,6 @@ You can install colcon-runner using pip:
 pip install colcon-runner
 ```
 
-## ROS Jazzy pixi workspace
-
-- A Pixi environment named `ros-jazzy` installs `colcon` + `colcon-clean`, build tools, and ROS metadata packages. Enter it with `pixi shell -e ros-jazzy` (and export `ROS_DISTRO=jazzy` if you want it in your environment) or run tasks using `pixi run -e ros-jazzy <cmd>`.
-- A minimal workspace lives in `ros_ws` with two packages: `jazzy_py_demo` (Python, pytest) and `jazzy_cpp_demo` (C++/CMake with GTest). Both are discoverable by `colcon build/test`.
-- From the workspace root you can exercise the runner end-to-end: `cr c` (clean), `cr b` (build), `cr t` (test). Use `--dry-run` to inspect generated colcon commands without executing them.
-- The integration test `test/test_ros_workspace_integration.py` copies `ros_ws` to a temp dir and verifies build/test/clean using `cr`.
-
-### Sourcing the Workspace
-
-After building with `cr b`, the workspace is ready to be sourced. The build process creates setup scripts in the `install/` directory that configure your environment to use the built packages.
-
-#### Quick Source with `cr e`
-
-The easiest way to source your workspace is using the `cr e` command:
-
-```bash
-# Build your workspace
-cr b
-
-# Source the workspace in your current shell
-eval $(cr e)
-
-# Now you can use your packages
-python -c "import jazzy_py_demo"  # Python packages are importable
-ros2 run jazzy_cpp_demo demo_exe  # Executables are in PATH
-```
-
-The `cr e` command automatically detects your shell (bash, zsh, sh, fish) and outputs the correct source command for your workspace.
-
-#### Manual Sourcing
-
-Alternatively, you can manually source the setup files:
-
-```bash
-# Build your workspace
-cr b
-
-# Source the workspace manually
-source install/setup.bash  # for bash
-# or
-source install/setup.zsh   # for zsh
-```
-
-#### Shell Function for Automatic Sourcing
-
-For convenience, you can add this function to your `~/.bashrc` or `~/.zshrc` to automatically source after building:
-
-```bash
-# Smart colcon-runner wrapper that auto-sources after build
-function cr() {
-    command cr "$@"
-    local exit_code=$?
-    # If the command was a build and it succeeded, auto-source the workspace
-    if [[ $exit_code -eq 0 && "$1" == *"b"* ]]; then
-        eval $(command cr e 2>/dev/null)
-    fi
-    return $exit_code
-}
-```
-
-With this function, running `cr b` will automatically source your workspace after a successful build.
-
-#### Integration Tests
-
-The integration tests verify that:
-- Setup files (setup.bash, setup.sh, setup.zsh) are created after building
-- Environment variables (PYTHONPATH, CMAKE_PREFIX_PATH, etc.) are correctly set after sourcing
-- Python packages can be imported after sourcing the workspace
-- The `cr e` command correctly outputs the source command for your shell
-
 ```
 CR(1)                         User Commands                        CR(1)
 
@@ -114,7 +44,6 @@ VERBS
     t       Test packages.
     c       clean packages.
     i       install dependencies using rosdep.
-    e       env - print shell command to source the workspace.
 
 SPECIFIER
     o       only (--packages-select)
@@ -176,11 +105,6 @@ USAGE EXAMPLES
 
     cr iu pkg_1
         Install dependencies for 'pkg_1' and its dependencies.
-
-    cr e
-        Print shell command to source the workspace.
-        Use with: eval $(cr e)
-        This sources the workspace in your current shell.
 
   Compound Commands:
     cr s pkg1
