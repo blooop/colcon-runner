@@ -29,6 +29,8 @@ NAME
 
 SYNOPSIS
     cr VERB [PKG] [OPTIONS]
+    cr --help | -h
+    cr --version | -v
 
 DESCRIPTION
     A minimal wrapper around colcon providing short, mnemonic commands

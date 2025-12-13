@@ -9,6 +9,7 @@ import unittest
 import os
 import shutil
 from unittest import mock
+from importlib.metadata import version
 
 # Import the module under test
 from colcon_runner import colcon_runner
@@ -435,6 +436,53 @@ class WorkspaceRootTests(unittest.TestCase):
         ):
             root = colcon_runner._find_workspace_root()
             self.assertEqual(root, env_workspace)
+
+
+class VersionTests(unittest.TestCase):
+    def test_version_flag(self):
+        # Test --version flag
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            with self.assertRaises(SystemExit) as cm:
+                colcon_runner.main(["--version"])
+
+        self.assertEqual(cm.exception.code, 0)
+        output = buf.getvalue()
+        self.assertIn("cr (colcon-runner) version", output)
+        # Assert it contains the actual package version
+        expected_version = version("colcon-runner")
+        self.assertIn(expected_version, output)
+
+    def test_version_short_flag(self):
+        # Test -v flag
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            with self.assertRaises(SystemExit) as cm:
+                colcon_runner.main(["-v"])
+
+        self.assertEqual(cm.exception.code, 0)
+        output = buf.getvalue()
+        self.assertIn("cr (colcon-runner) version", output)
+        # Assert it contains the actual package version
+        expected_version = version("colcon-runner")
+        self.assertIn(expected_version, output)
+
+    def test_version_not_installed(self):
+        # Test fallback path when the package is not installed
+        from importlib.metadata import PackageNotFoundError
+
+        buf = io.StringIO()
+        # Mock the version function to raise PackageNotFoundError
+        with mock.patch("colcon_runner.colcon_runner.version") as mock_version:
+            mock_version.side_effect = PackageNotFoundError
+
+            with contextlib.redirect_stdout(buf):
+                with self.assertRaises(SystemExit) as cm:
+                    colcon_runner.main(["--version"])
+
+        self.assertEqual(cm.exception.code, 0)
+        output = buf.getvalue()
+        self.assertIn("cr (colcon-runner) version unknown (not installed)", output)
 
 
 if __name__ == "__main__":  # pragma: no cover — run the tests
