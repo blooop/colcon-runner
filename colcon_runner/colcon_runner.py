@@ -310,14 +310,8 @@ def _parse_verbs(cmds: str):
 
 
 def _build_colcon_cmd(verb, spec, pkg):
-    if verb == "b":
-        args = ["build"]
-    elif verb == "t":
-        args = ["test"]
-    elif verb == "c":
-        args = [
-            "clean",
-            "workspace",
+    if verb == "c":
+        clean_defaults = [
             "--yes",
             "--base-select",
             "build",
@@ -325,8 +319,25 @@ def _build_colcon_cmd(verb, spec, pkg):
             "log",
             "test_result",
         ]
+        if spec == "a":
+            return ["clean", "workspace", *clean_defaults]
+        if spec == "o":
+            if not pkg:
+                raise ParseError(f"{verb} 'only' requires a package name")
+            return ["clean", "packages", *clean_defaults, "--packages-select", pkg]
+        if spec == "u":
+            if not pkg:
+                raise ParseError(f"{verb} 'upto' requires a package name")
+            return ["clean", "packages", *clean_defaults, "--packages-up-to", pkg]
+        raise ParseError(f"unknown specifier '{spec}'")
+
+    if verb == "b":
+        args = ["build"]
+    elif verb == "t":
+        args = ["test"]
     else:
         raise ParseError(f"unsupported verb '{verb}'")
+
     if spec == "o":
         if not pkg:
             raise ParseError(f"{verb} 'only' requires a package name")

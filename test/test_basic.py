@@ -86,6 +86,58 @@ class BuildCommandTests(unittest.TestCase):
         with self.assertRaises(colcon_runner.ParseError):
             colcon_runner._build_colcon_cmd("c", "u", None)
 
+    def test_clean_all(self):
+        cmd = colcon_runner._build_colcon_cmd("c", "a", None)
+        self.assertEqual(
+            cmd,
+            [
+                "clean",
+                "workspace",
+                "--yes",
+                "--base-select",
+                "build",
+                "install",
+                "log",
+                "test_result",
+            ],
+        )
+
+    def test_clean_only(self):
+        cmd = colcon_runner._build_colcon_cmd("c", "o", "pkg")
+        self.assertEqual(
+            cmd,
+            [
+                "clean",
+                "packages",
+                "--yes",
+                "--base-select",
+                "build",
+                "install",
+                "log",
+                "test_result",
+                "--packages-select",
+                "pkg",
+            ],
+        )
+
+    def test_clean_upto(self):
+        cmd = colcon_runner._build_colcon_cmd("c", "u", "pkg")
+        self.assertEqual(
+            cmd,
+            [
+                "clean",
+                "packages",
+                "--yes",
+                "--base-select",
+                "build",
+                "install",
+                "log",
+                "test_result",
+                "--packages-up-to",
+                "pkg",
+            ],
+        )
+
 
 class RosdepCommandTests(unittest.TestCase):
     # pylint: disable=protected-access

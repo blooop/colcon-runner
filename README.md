@@ -173,6 +173,14 @@ Colcon runner assumes you have colcon defaults set up to ensure your paths and s
     "log-base": "/home/ros_ws/ros_build/logs",
     "test-result-base": "/home/ros_ws/ros_build/build"
   },
+  "clean.packages": {
+    "yes": true,
+    "base-select": ["build", "install", "log", "test_result"],
+    "build-base": "/home/ros_ws/ros_build/build",
+    "install-base": "/home/ros_ws/ros_build/install",
+    "log-base": "/home/ros_ws/ros_build/logs",
+    "test-result-base": "/home/ros_ws/ros_build/build"
+  },
   "": {"log-base": "/home/ros_ws/ros_build/logs"}
 }
 ```
