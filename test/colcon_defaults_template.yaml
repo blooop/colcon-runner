@@ -26,5 +26,13 @@ clean.workspace:
   log-base: "{workspace}/log"
   test-result-base: "{workspace}/build"
 
+clean.packages:
+  "yes": true
+  base-select: ["build", "install", "log", "test_result"]
+  build-base: "{workspace}/build"
+  install-base: "{workspace}/install"
+  log-base: "{workspace}/log"
+  test-result-base: "{workspace}/build"
+
 "":
   log-base: "{workspace}/log"

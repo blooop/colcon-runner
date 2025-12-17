@@ -86,6 +86,70 @@ class BuildCommandTests(unittest.TestCase):
         with self.assertRaises(colcon_runner.ParseError):
             colcon_runner._build_colcon_cmd("c", "u", None)
 
+    def test_clean_only_missing_pkg(self):
+        # Test that clean only without package raises ParseError
+        with self.assertRaises(colcon_runner.ParseError) as cm:
+            colcon_runner._build_colcon_cmd("c", "o", None)
+        self.assertIn("'only' requires a package name", str(cm.exception))
+
+    def test_clean_upto_missing_pkg(self):
+        # Test that clean upto without package raises ParseError
+        with self.assertRaises(colcon_runner.ParseError) as cm:
+            colcon_runner._build_colcon_cmd("c", "u", None)
+        self.assertIn("'upto' requires a package name", str(cm.exception))
+
+    def test_clean_all(self):
+        cmd = colcon_runner._build_colcon_cmd("c", "a", None)
+        self.assertEqual(
+            cmd,
+            [
+                "clean",
+                "workspace",
+                "--yes",
+                "--base-select",
+                "build",
+                "install",
+                "log",
+                "test_result",
+            ],
+        )
+
+    def test_clean_only(self):
+        cmd = colcon_runner._build_colcon_cmd("c", "o", "pkg")
+        self.assertEqual(
+            cmd,
+            [
+                "clean",
+                "packages",
+                "--yes",
+                "--base-select",
+                "build",
+                "install",
+                "log",
+                "test_result",
+                "--packages-select",
+                "pkg",
+            ],
+        )
+
+    def test_clean_upto(self):
+        cmd = colcon_runner._build_colcon_cmd("c", "u", "pkg")
+        self.assertEqual(
+            cmd,
+            [
+                "clean",
+                "packages",
+                "--yes",
+                "--base-select",
+                "build",
+                "install",
+                "log",
+                "test_result",
+                "--packages-up-to",
+                "pkg",
+            ],
+        )
+
 
 class RosdepCommandTests(unittest.TestCase):
     # pylint: disable=protected-access
@@ -251,6 +315,66 @@ class IntegrationTests(unittest.TestCase):
             self.assertIn("or 'iu example_package' (up-to)?", log_output)
 
             # subprocess.run should *not* be called when --dry-run is active
+            m_sp.run.assert_not_called()
+
+    def test_clean_all_dry_run(self):
+        # Test that 'cr c' defaults to clean all (workspace)
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["c", "--dry-run"])
+
+            output = buf.getvalue()
+            self.assertIn("colcon clean workspace", output)
+            self.assertIn("--yes", output)
+            self.assertIn("--base-select build install log test_result", output)
+            m_sp.run.assert_not_called()
+
+    def test_clean_all_explicit_dry_run(self):
+        # Test that 'cr ca' explicitly cleans all (workspace)
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["ca", "--dry-run"])
+
+            output = buf.getvalue()
+            self.assertIn("colcon clean workspace", output)
+            self.assertIn("--yes", output)
+            self.assertIn("--base-select build install log test_result", output)
+            m_sp.run.assert_not_called()
+
+    def test_clean_only_dry_run(self):
+        # Test that 'cr co pkg' cleans only specific package
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["co", "test_pkg", "--dry-run"])
+
+            output = buf.getvalue()
+            self.assertIn("colcon clean packages", output)
+            self.assertIn("--packages-select test_pkg", output)
+            self.assertIn("--yes", output)
+            m_sp.run.assert_not_called()
+
+    def test_clean_upto_dry_run(self):
+        # Test that 'cr cu pkg' cleans up to specific package
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["cu", "test_pkg", "--dry-run"])
+
+            output = buf.getvalue()
+            self.assertIn("colcon clean packages", output)
+            self.assertIn("--packages-up-to test_pkg", output)
+            self.assertIn("--yes", output)
             m_sp.run.assert_not_called()
 
 

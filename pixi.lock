@@ -1239,8 +1239,8 @@ packages:
   requires_python: '>=3.6'
 - pypi: ./
   name: colcon-runner
-  version: 0.6.1
-  sha256: e0fdaf4204975246c083c1c486aee3995dea5c3922fd3f3d1ffe233b3667e1e2
+  version: 0.8.0
+  sha256: 269707603490c27fc533431cb59d228bd7b6b2da8cd78f92b10598911b48201b
   requires_dist:
   - pylint>=3.2.5,<=4.0.4 ; extra == 'test'
   - pytest-cov>=4.1,<=7.0.0 ; extra == 'test'
