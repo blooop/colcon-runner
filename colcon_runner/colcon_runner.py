@@ -122,9 +122,9 @@ import os
 import subprocess
 import shlex
 import logging
-import yaml
+import yaml  # type: ignore[import-untyped]
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Tuple, NoReturn
 from importlib.metadata import version, PackageNotFoundError
 
 PKG_FILE: str = os.path.expanduser("~/.colcon_shortcuts_pkg")
@@ -285,9 +285,9 @@ def _find_workspace_root() -> str:
         current = parent
 
 
-def _parse_verbs(cmds: str):
+def _parse_verbs(cmds: str) -> List[Tuple[str, Optional[str]]]:
     """Parse a string like 'boto' into [(verb, spec), ...]."""
-    result = []
+    result: List[Tuple[str, Optional[str]]] = []
     i = 0
     while i < len(cmds):
         if cmds[i] not in ("s", "b", "t", "c", "i"):
@@ -366,7 +366,7 @@ def save_default_pkg(pkg: str) -> None:
     print(f"Default package set to '{pkg}'")
 
 
-def error(msg: str) -> None:
+def error(msg: str) -> NoReturn:
     print(f"Error: {msg}", file=sys.stderr)
     sys.exit(1)
 
@@ -377,7 +377,6 @@ def get_pkg(override: Optional[str]) -> str:
     if default := load_default_pkg():
         return default
     error("no package specified and no default set")
-    return None
 
 
 def _run_tool(tool: str, args: List[str], extra_opts: List[str]) -> None:
@@ -486,6 +485,9 @@ def main(argv=None) -> None:
 
         # Determine which tool to use based on verb
         tool = "rosdep" if verb == "i" else "colcon"
+
+        # spec should always be set for non-'s' verbs
+        assert spec is not None, f"spec is None for verb '{verb}'"
 
         # Run apt update and rosdep update before first rosdep install (max once per day)
         if tool == "rosdep" and not rosdep_updated:
