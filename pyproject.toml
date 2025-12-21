@@ -14,6 +14,7 @@ Home = "https://github.com/blooop/colcon_runner"
 
 [project.scripts]
 cr = "colcon_runner.colcon_runner:main"
+generate-colcon-defaults = "colcon_runner.generate_defaults:main"
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
