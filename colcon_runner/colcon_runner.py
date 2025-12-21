@@ -122,7 +122,7 @@ import os
 import subprocess
 import shlex
 import logging
-import yaml  # type: ignore[import-untyped]
+import yaml
 from datetime import datetime
 from typing import Optional, List, Tuple, NoReturn
 from importlib.metadata import version, PackageNotFoundError
@@ -479,6 +479,7 @@ def main(argv=None) -> None:
             # set default package
             if not override_pkg:
                 error("'s' requires a package name")
+            assert override_pkg is not None  # Help type checker after error() check
             save_default_pkg(override_pkg)
             # do not run any tool for 's'
             continue
