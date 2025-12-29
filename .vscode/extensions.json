@@ -1,14 +1,11 @@
 {
   "recommendations": [
-    "ms-python.python",
-    "ms-python.vscode-pylance",
-    "ms-python.pylint",
-    "njpwerner.autodocstring",
-    "charliermarsh.ruff",
-    "mhutchie.git-graph",
-    "tamasfe.even-better-toml",
-    "ms-azuretools.vscode-docker",
-    "ryanluker.vscode-coverage-gutters",
-    "jjjermiah.pixi-vscode"
+      "tamasfe.even-better-toml",
+      "ms-python.python",
+      "ms-python.vscode-pylance",
+      "jjjermiah.pixi-vscode",
+      "charliermarsh.ruff",
+      "tamasfe.even-better-toml",
+      "mhutchie.git-graph"
   ]
 }
