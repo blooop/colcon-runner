@@ -171,3 +171,5 @@ log/**
 managed_context/metadata.json
 test_suite_analysis/metadata.json
 ros_ws/**
+
+.devpod/
