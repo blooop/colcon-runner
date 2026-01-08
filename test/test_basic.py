@@ -609,5 +609,156 @@ class VersionTests(unittest.TestCase):
         self.assertIn("cr (colcon-runner) version unknown (not installed)", output)
 
 
+class ErrorHandlingTests(unittest.TestCase):
+    """Test that CLI errors are user-friendly without stack traces."""
+
+    def _run_main(self, argv):
+        """Helper to run main() capturing stdout/stderr and SystemExit."""
+        buf_out = io.StringIO()
+        buf_err = io.StringIO()
+        with contextlib.redirect_stdout(buf_out), contextlib.redirect_stderr(buf_err):
+            with self.assertRaises(SystemExit) as cm:
+                colcon_runner.main(argv)
+        return cm.exception.code, buf_out.getvalue(), buf_err.getvalue()
+
+    def _assert_no_stack_trace(self, stderr: str):
+        """Ensure no Python traceback is shown to the user."""
+        self.assertNotIn("Traceback (most recent call last)", stderr)
+        # Don't check for "Exception:" or "KeyboardInterrupt" as these might appear in error messages
+        self.assertNotIn("ParseError", stderr)
+        self.assertNotIn('File "', stderr)
+
+    def test_unknown_command_no_stack_trace(self):
+        """Test that unknown commands show clean error without stack trace."""
+        exit_code, _stdout, stderr = self._run_main(["h"])
+
+        # Should exit with code 1
+        self.assertEqual(exit_code, 1)
+
+        # Check error output
+        self.assertIn("Error: unknown command letter 'h'", stderr)
+        self.assertIn(
+            "Valid commands: s (set), b (build), t (test), c (clean), i (install)", stderr
+        )
+        self.assertIn("Use 'cr --help' for more information", stderr)
+
+        # Ensure no stack trace is present
+        self._assert_no_stack_trace(stderr)
+
+    def test_multiple_unknown_commands_no_stack_trace(self):
+        """Test that multiple invalid commands also show clean errors."""
+        exit_code, _stdout, stderr = self._run_main(["xyz"])
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("Error: unknown command letter 'x'", stderr)
+
+        # Assert full friendly help text as in single command test
+        self.assertIn(
+            "Valid commands: s (set), b (build), t (test), c (clean), i (install)", stderr
+        )
+        self.assertIn("Use 'cr --help' for more information", stderr)
+
+        self._assert_no_stack_trace(stderr)
+
+    def test_invalid_package_name_no_stack_trace(self):
+        """Test that invalid package names show clean errors."""
+        exit_code, _stdout, stderr = self._run_main(["bo", "../etc/passwd", "--dry-run"])
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("Error:", stderr)
+        self.assertIn("path traversal", stderr)
+
+        # Ensure raw unsafe path is not echoed back to user
+        self.assertNotIn("../etc/passwd", stderr)
+
+        self._assert_no_stack_trace(stderr)
+
+    def test_missing_package_no_stack_trace(self):
+        """Test that missing package argument shows clean error."""
+        # Remove default package if exists
+        if os.path.exists(colcon_runner.PKG_FILE):
+            backup = colcon_runner.PKG_FILE + ".test_backup"
+            shutil.copy(colcon_runner.PKG_FILE, backup)
+            os.remove(colcon_runner.PKG_FILE)
+            self.addCleanup(
+                lambda: os.path.exists(backup) and shutil.move(backup, colcon_runner.PKG_FILE)
+            )
+
+        exit_code, _stdout, stderr = self._run_main(["bo"])
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("Error: no package specified and no default set", stderr)
+        self._assert_no_stack_trace(stderr)
+
+    def test_workspace_not_found_no_stack_trace(self):
+        """Test that missing workspace shows clean error."""
+        # Create a temp dir without src directory
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Clear environment variables
+            with mock.patch.dict(os.environ, {}, clear=True):
+                cwd = os.getcwd()
+                try:
+                    os.chdir(tmpdir)
+                    exit_code, _stdout, stderr = self._run_main(["ia", "--dry-run"])
+                finally:
+                    os.chdir(cwd)
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("Error:", stderr)
+        self.assertIn("Could not find workspace root", stderr)
+        self._assert_no_stack_trace(stderr)
+
+    def test_keyboard_interrupt_handling(self):
+        """KeyboardInterrupt should exit with 130 and a friendly message, no stack trace."""
+
+        def raise_keyboard_interrupt(*_args, **_kwargs):
+            raise KeyboardInterrupt()
+
+        with mock.patch(
+            "colcon_runner.colcon_runner._parse_verbs",
+            side_effect=raise_keyboard_interrupt,
+        ):
+            exit_code, _stdout, stderr = self._run_main(["b"])
+
+        self.assertEqual(exit_code, 130)
+        self.assertIn("Interrupted by user", stderr)
+        self._assert_no_stack_trace(stderr)
+
+    def test_file_io_error_handling(self):
+        """File/permission errors should show the OS error message but no stack trace."""
+
+        def raise_permission_error(*_args, **_kwargs):
+            raise PermissionError("Permission denied")
+
+        # Mock open() used by save_default_pkg to simulate a file error
+        with mock.patch("builtins.open", side_effect=raise_permission_error):
+            exit_code, _stdout, stderr = self._run_main(["s", "demo_pkg"])
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("Error: OS error while running colcon-runner:", stderr)
+        self.assertIn("Permission denied", stderr)
+        # No stack trace for OS errors
+        self._assert_no_stack_trace(stderr)
+
+    def test_unexpected_exception_handling(self):
+        """Generic unexpected exceptions should be caught and reported with traceback for debugging."""
+
+        def raise_generic_exception(*_args, **_kwargs):
+            raise RuntimeError("simulated internal error for testing")
+
+        with mock.patch(
+            "colcon_runner.colcon_runner._parse_verbs",
+            side_effect=raise_generic_exception,
+        ):
+            exit_code, _stdout, stderr = self._run_main(["b"])
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("Error: unexpected error:", stderr)
+
+        # For unexpected exceptions, we DO want the traceback logged to stderr for debugging
+        self.assertIn("Traceback (most recent call last)", stderr)
+        self.assertIn("RuntimeError", stderr)
+
+
 if __name__ == "__main__":  # pragma: no cover — run the tests
     unittest.main(verbosity=2)

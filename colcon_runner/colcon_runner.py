@@ -122,6 +122,7 @@ import os
 import subprocess
 import shlex
 import logging
+import traceback
 import yaml
 from datetime import datetime
 from typing import Optional, List, Tuple, NoReturn
@@ -291,7 +292,11 @@ def _parse_verbs(cmds: str) -> List[Tuple[str, Optional[str]]]:
     i = 0
     while i < len(cmds):
         if cmds[i] not in ("s", "b", "t", "c", "i"):
-            raise ParseError(f"unknown command letter '{cmds[i]}'")
+            raise ParseError(
+                f"unknown command letter '{cmds[i]}'\n"
+                f"Valid commands: s (set), b (build), t (test), c (clean), i (install)\n"
+                f"Use 'cr --help' for more information"
+            )
 
         verb = cmds[i]
         if verb == "s":
@@ -324,11 +329,13 @@ def _build_colcon_cmd(verb, spec, pkg):
         if spec == "o":
             if not pkg:
                 raise ParseError(f"{verb} 'only' requires a package name")
-            return ["clean", "packages", *clean_defaults, "--packages-select", pkg]
+            safe_pkg = _sanitize_pkg_name(pkg)
+            return ["clean", "packages", *clean_defaults, "--packages-select", safe_pkg]
         if spec == "u":
             if not pkg:
                 raise ParseError(f"{verb} 'upto' requires a package name")
-            return ["clean", "packages", *clean_defaults, "--packages-up-to", pkg]
+            safe_pkg = _sanitize_pkg_name(pkg)
+            return ["clean", "packages", *clean_defaults, "--packages-up-to", safe_pkg]
         raise ParseError(f"unknown specifier '{spec}'")
 
     if verb == "b":
@@ -341,11 +348,13 @@ def _build_colcon_cmd(verb, spec, pkg):
     if spec == "o":
         if not pkg:
             raise ParseError(f"{verb} 'only' requires a package name")
-        args.extend(["--packages-select", pkg])
+        safe_pkg = _sanitize_pkg_name(pkg)
+        args.extend(["--packages-select", safe_pkg])
     elif spec == "u":
         if not pkg:
             raise ParseError(f"{verb} 'upto' requires a package name")
-        args.extend(["--packages-up-to", pkg])
+        safe_pkg = _sanitize_pkg_name(pkg)
+        args.extend(["--packages-up-to", safe_pkg])
     elif spec == "a":
         pass
     else:
@@ -361,9 +370,10 @@ def load_default_pkg() -> Optional[str]:
 
 
 def save_default_pkg(pkg: str) -> None:
+    safe_pkg = _sanitize_pkg_name(pkg)
     with open(PKG_FILE, "w", encoding="utf-8") as f:
-        f.write(pkg)
-    print(f"Default package set to '{pkg}'")
+        f.write(safe_pkg)
+    print(f"Default package set to '{safe_pkg}'")
 
 
 def error(msg: str) -> NoReturn:
@@ -375,8 +385,37 @@ def get_pkg(override: Optional[str]) -> str:
     if override:
         return override
     if default := load_default_pkg():
-        return default
+        # Sanitize loaded package name for safety
+        return _sanitize_pkg_name(default)
     error("no package specified and no default set")
+
+
+def _handle_rosdep_update(extra_opts: List[str]) -> None:
+    """Handle rosdep and apt update if needed."""
+    if not _update_needed():
+        print("+ sudo apt update (skipped - already run today)")
+        print("+ rosdep update (skipped - already run today)")
+        return
+
+    if "--dry-run" in extra_opts:
+        print("+ sudo apt update")
+        print("+ rosdep update")
+        return
+
+    # Run apt update first to refresh package lists
+    print("+ sudo apt update")
+    ret = subprocess.run(["sudo", "apt", "update"], check=False).returncode
+    if ret != 0:
+        print("Warning: sudo apt update failed, continuing with rosdep update")
+
+    print("+ rosdep update")
+    # Suppress DeprecationWarnings for rosdep
+    env = os.environ.copy()
+    env["PYTHONWARNINGS"] = "ignore::DeprecationWarning"
+    ret = subprocess.run(["rosdep", "update"], check=False, env=env).returncode
+    if ret != 0:
+        sys.exit(ret)
+    _mark_updated()
 
 
 def _run_tool(tool: str, args: List[str], extra_opts: List[str]) -> None:
@@ -456,88 +495,80 @@ def main(argv=None) -> None:
             print("cr (colcon-runner) version unknown (not installed)")
         sys.exit(0)
 
-    cmds: str = argv[0]
-    rest: List[str] = argv[1:]
+    try:
+        cmds: str = argv[0]
+        rest: List[str] = argv[1:]
 
-    # extract override pkg (first non-dash arg)
-    override_pkg: Optional[str] = None
-    extra_opts: List[str] = []
-    for arg in rest:
-        if not arg.startswith("-") and override_pkg is None:
-            override_pkg = arg
-        else:
-            extra_opts.append(arg)
-
-    parsed_verbs = _parse_verbs(cmds)
-
-    # Track if rosdep update has been run
-    rosdep_updated = False
-
-    # execute each segment
-    for verb, spec in parsed_verbs:
-        if verb == "s":
-            # set default package
-            if not override_pkg:
-                error("'s' requires a package name")
-            assert override_pkg is not None  # Help type checker after error() check
-            save_default_pkg(override_pkg)
-            # do not run any tool for 's'
-            continue
-
-        # Determine which tool to use based on verb
-        tool = "rosdep" if verb == "i" else "colcon"
-
-        # spec should always be set for non-'s' verbs
-        assert spec is not None, f"spec is None for verb '{verb}'"
-
-        # Run apt update and rosdep update before first rosdep install (max once per day)
-        if tool == "rosdep" and not rosdep_updated:
-            if _update_needed():
-                if "--dry-run" not in extra_opts:
-                    # Run apt update first to refresh package lists
-                    print("+ sudo apt update")
-                    ret = subprocess.run(["sudo", "apt", "update"], check=False).returncode
-                    if ret != 0:
-                        print("Warning: sudo apt update failed, continuing with rosdep update")
-
-                    print("+ rosdep update")
-                    # Suppress DeprecationWarnings for rosdep
-                    env = os.environ.copy()
-                    env["PYTHONWARNINGS"] = "ignore::DeprecationWarning"
-                    ret = subprocess.run(["rosdep", "update"], check=False, env=env).returncode
-                    if ret != 0:
-                        sys.exit(ret)
-                    _mark_updated()
-                else:
-                    print("+ sudo apt update")
-                    print("+ rosdep update")
+        # extract override pkg (first non-dash arg)
+        override_pkg: Optional[str] = None
+        extra_opts: List[str] = []
+        for arg in rest:
+            if not arg.startswith("-") and override_pkg is None:
+                override_pkg = arg
             else:
-                print("+ sudo apt update (skipped - already run today)")
-                print("+ rosdep update (skipped - already run today)")
-            rosdep_updated = True
+                extra_opts.append(arg)
 
-        # Determine if package is needed
-        need_pkg: bool = spec in ("o", "u")
-        pkg: Optional[str] = get_pkg(override_pkg) if need_pkg else None
+        parsed_verbs = _parse_verbs(cmds)
 
-        # Warn if package name provided but will be ignored
-        if spec == "a" and override_pkg and not override_pkg.startswith("-"):
-            logger.warning(
-                f"Package name '{override_pkg}' provided but specifier defaulted to 'all'.\n"
-                f"         Did you mean '{verb}o {override_pkg}' (only) or '{verb}u {override_pkg}' (up-to)?"
-            )
+        # Track if rosdep update has been run
+        rosdep_updated = False
 
-        # Build command arguments
-        args: List[str] = _build_cmd(tool, verb, spec, pkg)
+        # execute each segment
+        for verb, spec in parsed_verbs:
+            if verb == "s":
+                # set default package
+                if not override_pkg:
+                    error("'s' requires a package name")
+                assert override_pkg is not None  # Help type checker after error() check
+                save_default_pkg(override_pkg)
+                # do not run any tool for 's'
+                continue
 
-        # Support --dry-run for tests
-        if "--dry-run" in extra_opts:
-            cmd_args = [tool] + args + extra_opts
-            print("+ " + " ".join(shlex.quote(a) for a in cmd_args))
-            continue
+            # Determine which tool to use based on verb
+            tool = "rosdep" if verb == "i" else "colcon"
 
-        # Execute the command
-        _run_tool(tool, args, extra_opts)
+            # spec should always be set for non-'s' verbs
+            assert spec is not None, f"spec is None for verb '{verb}'"
+
+            # Run apt update and rosdep update before first rosdep install (max once per day)
+            if tool == "rosdep" and not rosdep_updated:
+                _handle_rosdep_update(extra_opts)
+                rosdep_updated = True
+
+            # Determine if package is needed
+            need_pkg: bool = spec in ("o", "u")
+            pkg: Optional[str] = get_pkg(override_pkg) if need_pkg else None
+
+            # Warn if package name provided but will be ignored
+            if spec == "a" and override_pkg and not override_pkg.startswith("-"):
+                logger.warning(
+                    f"Package name '{override_pkg}' provided but specifier defaulted to 'all'.\n"
+                    f"         Did you mean '{verb}o {override_pkg}' (only) or '{verb}u {override_pkg}' (up-to)?"
+                )
+
+            # Build command arguments
+            args: List[str] = _build_cmd(tool, verb, spec, pkg)
+
+            # Support --dry-run for tests
+            if "--dry-run" in extra_opts:
+                cmd_args = [tool] + args + extra_opts
+                print("+ " + " ".join(shlex.quote(a) for a in cmd_args))
+                continue
+
+            # Execute the command
+            _run_tool(tool, args, extra_opts)
+    except ParseError as e:
+        error(str(e))
+    except (OSError, IOError, PermissionError) as e:
+        # Catch OS-level issues (including file I/O and missing external tools like colcon/rosdep)
+        error(f"OS error while running colcon-runner: {e}")
+    except KeyboardInterrupt:
+        print("\nInterrupted by user", file=sys.stderr)
+        sys.exit(130)
+    except Exception as e:
+        # Log full traceback for unexpected errors before showing a concise message
+        traceback.print_exc(file=sys.stderr)
+        error(f"unexpected error: {e}")
 
 
 if __name__ == "__main__":
