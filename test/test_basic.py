@@ -609,5 +609,113 @@ class VersionTests(unittest.TestCase):
         self.assertIn("cr (colcon-runner) version unknown (not installed)", output)
 
 
+class ErrorHandlingTests(unittest.TestCase):
+    """Test that CLI errors are user-friendly without stack traces."""
+
+    def test_unknown_command_no_stack_trace(self):
+        """Test that unknown commands show clean error without stack trace."""
+        buf_out = io.StringIO()
+        buf_err = io.StringIO()
+        with contextlib.redirect_stdout(buf_out):
+            with contextlib.redirect_stderr(buf_err):
+                with self.assertRaises(SystemExit) as cm:
+                    colcon_runner.main(["h"])
+
+        # Should exit with code 1
+        self.assertEqual(cm.exception.code, 1)
+
+        # Check error output
+        error_output = buf_err.getvalue()
+        self.assertIn("Error: unknown command letter 'h'", error_output)
+        self.assertIn(
+            "Valid commands: s (set), b (build), t (test), c (clean), i (install)", error_output
+        )
+        self.assertIn("Use 'cr --help' for more information", error_output)
+
+        # Ensure no stack trace is present
+        self.assertNotIn("Traceback", error_output)
+        self.assertNotIn("ParseError", error_output)
+        self.assertNotIn("File", error_output)
+
+    def test_multiple_unknown_commands_no_stack_trace(self):
+        """Test that multiple invalid commands also show clean errors."""
+        buf_out = io.StringIO()
+        buf_err = io.StringIO()
+        with contextlib.redirect_stdout(buf_out):
+            with contextlib.redirect_stderr(buf_err):
+                with self.assertRaises(SystemExit) as cm:
+                    colcon_runner.main(["xyz"])
+
+        self.assertEqual(cm.exception.code, 1)
+        error_output = buf_err.getvalue()
+        self.assertIn("Error: unknown command letter 'x'", error_output)
+        self.assertNotIn("Traceback", error_output)
+
+    def test_invalid_package_name_no_stack_trace(self):
+        """Test that invalid package names show clean errors."""
+        buf_out = io.StringIO()
+        buf_err = io.StringIO()
+        with contextlib.redirect_stdout(buf_out):
+            with contextlib.redirect_stderr(buf_err):
+                with self.assertRaises(SystemExit) as cm:
+                    colcon_runner.main(["bo", "../etc/passwd", "--dry-run"])
+
+        self.assertEqual(cm.exception.code, 1)
+        error_output = buf_err.getvalue()
+        self.assertIn("Error:", error_output)
+        self.assertIn("path traversal", error_output)
+        self.assertNotIn("Traceback", error_output)
+        self.assertNotIn("ParseError", error_output)
+
+    def test_missing_package_no_stack_trace(self):
+        """Test that missing package argument shows clean error."""
+        # Remove default package if exists
+        if os.path.exists(colcon_runner.PKG_FILE):
+            backup = colcon_runner.PKG_FILE + ".test_backup"
+            shutil.copy(colcon_runner.PKG_FILE, backup)
+            os.remove(colcon_runner.PKG_FILE)
+            self.addCleanup(
+                lambda: os.path.exists(backup) and shutil.move(backup, colcon_runner.PKG_FILE)
+            )
+
+        buf_out = io.StringIO()
+        buf_err = io.StringIO()
+        with contextlib.redirect_stdout(buf_out):
+            with contextlib.redirect_stderr(buf_err):
+                with self.assertRaises(SystemExit) as cm:
+                    colcon_runner.main(["bo"])
+
+        self.assertEqual(cm.exception.code, 1)
+        error_output = buf_err.getvalue()
+        self.assertIn("Error: no package specified and no default set", error_output)
+        self.assertNotIn("Traceback", error_output)
+
+    def test_workspace_not_found_no_stack_trace(self):
+        """Test that missing workspace shows clean error."""
+        # Create a temp dir without src directory
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Clear environment variables
+            with mock.patch.dict(os.environ, {}, clear=True):
+                buf_out = io.StringIO()
+                buf_err = io.StringIO()
+
+                cwd = os.getcwd()
+                try:
+                    os.chdir(tmpdir)
+                    with contextlib.redirect_stdout(buf_out):
+                        with contextlib.redirect_stderr(buf_err):
+                            with self.assertRaises(SystemExit) as cm:
+                                colcon_runner.main(["ia", "--dry-run"])
+                finally:
+                    os.chdir(cwd)
+
+        self.assertEqual(cm.exception.code, 1)
+        error_output = buf_err.getvalue()
+        self.assertIn("Error:", error_output)
+        self.assertIn("Could not find workspace root", error_output)
+        self.assertNotIn("Traceback", error_output)
+        self.assertNotIn("ParseError", error_output)
+
+
 if __name__ == "__main__":  # pragma: no cover — run the tests
     unittest.main(verbosity=2)
