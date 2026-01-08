@@ -21,6 +21,7 @@ platforms = ["linux-64"]
 
 [tool.pixi.dependencies]
 python = ">=3.10"
+shellcheck = ">=0.10.0,<0.11"
 
 [tool.pixi.feature.py310.dependencies]
 python = "3.10.*"
@@ -46,11 +47,12 @@ vcstool = ">=0.3.0"
 test = [
   "pylint>=3.2.5,<=4.0.4",
   "pytest-cov>=4.1,<=7.0.0",
-  "pytest>=7.4,<=9.0.1",
-  "hypothesis>=6.104.2,<=6.148.5",
-  "ruff>=0.5.0,<=0.14.7",
-  "coverage>=7.5.4,<=7.12.0",
-  "pre-commit<=4.5.0",
+  "pytest>=7.4,<=9.0.2",
+  "hypothesis>=6.104.2,<=6.148.9",
+  "ruff>=0.5.0,<=0.14.10",
+  "coverage>=7.5.4,<=7.13.1",
+  "pre-commit<=4.5.1",
+  "ty>=0.0.8",
 ]
 
 [build-system]
@@ -85,6 +87,7 @@ format = "ruff format ."
 check-clean-workspace = "git diff --exit-code"
 ruff-lint = "ruff check . --fix"
 pylint = "pylint --version && echo 'running pylint...' && pylint $(git ls-files '*.py')"
+ty = "ty --version && echo 'running ty...' && git ls-files -z '*.py' | xargs -0 ty check"
 lint = { depends-on = ["ruff-lint", "pylint"] }
 style = { depends-on = ["format", "lint"] }
 commit-format = "git commit -a -m'autoformat code' || true"
@@ -101,6 +104,7 @@ ci = { depends-on = [
   "format",
   "ruff-lint",
   "pylint",
+  "ty",
   "coverage",
   "coverage-report",
 ] }

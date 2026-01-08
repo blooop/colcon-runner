@@ -2,30 +2,43 @@
     "name": "colcon_runner",
     "build": {
         "dockerfile": "Dockerfile",
-        "context": "..",
-        "args": {
-            "PIXI_VERSION": "v0.45.0"
-        }
+        "context": ".."
     },
     "customizations": {
         "vscode": {
             "settings": {},
             "extensions": [
-                "jjjermiah.pixi-vscode",
                 "ms-python.python",
+                "ms-python.vscode-pylance",
+                "jjjermiah.pixi-vscode",
                 "charliermarsh.ruff",
                 "tamasfe.even-better-toml",
-                "mhutchie.git-graph",
-                "GitHub.copilot",
-                "ryanluker.vscode-coverage-gutters"
+                "mhutchie.git-graph"
               ]
         }
     },
 	"features": {
-		"ghcr.io/devcontainers/features/common-utils:2": {},
+        "ghcr.io/devcontainers/features/node":{},
+		"./claude-code": {}
+
+        // "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+		// "ghcr.io/devcontainers/features/common-utils:2": {},
+		// "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
+		// "ghcr.io/jsburckhardt/devcontainer-features/codex:latest": {}
+    },
+    "runArgs": [
+        "--network=host"
+    ],
+    "containerEnv": {
+        "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
+        "XDG_CONFIG_HOME": "/home/vscode/.config",
+        "XDG_CACHE_HOME": "/home/vscode/.cache",
+        "XDG_DATA_HOME": "/home/vscode/.local/share"
     },
     "mounts": [
-        "source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume"
+        "source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume",
+        "source=${localEnv:HOME}/.ssh/known_hosts,target=/home/vscode/.ssh/known_hosts,type=bind,ro",
+        "source=${localEnv:HOME}/.ssh/config,target=/home/vscode/.ssh/config,type=bind,ro"
     ],
     "postCreateCommand": "sudo chown vscode .pixi && pixi install"
 }
