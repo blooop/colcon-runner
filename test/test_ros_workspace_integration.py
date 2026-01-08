@@ -148,6 +148,6 @@ def test_workspace_sourcing_after_build(tmp_path):
             f"stderr:\n{result.stderr}"
         )
 
-    assert (
-        "Hello, test!" in result.stdout
-    ), "Package import and execution should work after sourcing"
+    assert "Hello, test!" in result.stdout, (
+        "Package import and execution should work after sourcing"
+    )
