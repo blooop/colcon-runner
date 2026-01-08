@@ -122,6 +122,7 @@ import os
 import subprocess
 import shlex
 import logging
+import traceback
 import yaml
 from datetime import datetime
 from typing import Optional, List, Tuple, NoReturn
@@ -384,7 +385,8 @@ def get_pkg(override: Optional[str]) -> str:
     if override:
         return override
     if default := load_default_pkg():
-        return default
+        # Sanitize loaded package name for safety
+        return _sanitize_pkg_name(default)
     error("no package specified and no default set")
 
 
@@ -558,12 +560,14 @@ def main(argv=None) -> None:
     except ParseError as e:
         error(str(e))
     except (OSError, IOError, PermissionError) as e:
-        error(f"file operation failed: {e}")
+        # Catch OS-level issues (including file I/O and missing external tools like colcon/rosdep)
+        error(f"OS error while running colcon-runner: {e}")
     except KeyboardInterrupt:
         print("\nInterrupted by user", file=sys.stderr)
         sys.exit(130)
     except Exception as e:
-        # Catch-all for any unexpected errors to prevent stack traces
+        # Log full traceback for unexpected errors before showing a concise message
+        traceback.print_exc(file=sys.stderr)
         error(f"unexpected error: {e}")
 
 
