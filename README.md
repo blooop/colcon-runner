@@ -145,42 +145,50 @@ SEE ALSO
 Colcon runner assumes you have colcon defaults set up to ensure your paths and settings are applied when you run colcon.  This is an example of a colcon defaults file to get consistent behavior across the commands supported here:
 
 ```yaml
-{
-  "build": {
-    "symlink-install": true,
-    "base-paths": ["/home/ros_ws/src"],
-    "build-base": "/home/ros_ws/ros_build/build",
-    "install-base": "/home/ros_ws/ros_build/install",
-    "cmake-args": [
-      "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
-      "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
-    ]
-  },
-  "test": {
-    "build-base": "/home/ros_ws/ros_build/build",
-    "install-base": "/home/ros_ws/ros_build/install",
-    "log-base": "/home/ros_ws/ros_build/logs",
-    "event-handlers": ["console_direct+"]
-  },
-  "test-result": {
-    "test-result-base": "/home/ros_ws/ros_build/build"
-  },
-  "clean.workspace": {
-    "yes": true,
-    "base-select": ["build", "install", "log", "test_result"],
-    "build-base": "/home/ros_ws/ros_build/build",
-    "install-base": "/home/ros_ws/ros_build/install",
-    "log-base": "/home/ros_ws/ros_build/logs",
-    "test-result-base": "/home/ros_ws/ros_build/build"
-  },
-  "clean.packages": {
-    "yes": true,
-    "base-select": ["build", "install", "log", "test_result"],
-    "build-base": "/home/ros_ws/ros_build/build",
-    "install-base": "/home/ros_ws/ros_build/install",
-    "log-base": "/home/ros_ws/ros_build/logs",
-    "test-result-base": "/home/ros_ws/ros_build/build"
-  },
-  "": {"log-base": "/home/ros_ws/ros_build/logs"}
-}
+build:
+  symlink-install: true
+  base-paths:
+    - "/home/ros_ws/src"
+  build-base: "/home/ros_ws/ros_build/build"
+  install-base: "/home/ros_ws/ros_build/install"
+  cmake-args:
+    - -DCMAKE_BUILD_TYPE=RelWithDebInfo
+    - -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+test:
+  build-base: "/home/ros_ws/ros_build/build"
+  install-base: "/home/ros_ws/ros_build/install"
+  log-base: "/home/ros_ws/ros_build/logs"
+  event-handlers:
+    - console_direct+
+
+test-result:
+  test-result-base: "/home/ros_ws/ros_build/build"
+
+clean.workspace:
+  "yes": true
+  base-select:
+    - build
+    - install
+    - log
+    - test_result
+  build-base: "/home/ros_ws/ros_build/build"
+  install-base: "/home/ros_ws/ros_build/install"
+  log-base: "/home/ros_ws/ros_build/logs"
+  test-result-base: "/home/ros_ws/ros_build/build"
+
+clean.packages:
+  "yes": true
+  base-select:
+    - build
+    - install
+    - log
+    - test_result
+  build-base: "/home/ros_ws/ros_build/build"
+  install-base: "/home/ros_ws/ros_build/install"
+  log-base: "/home/ros_ws/ros_build/logs"
+  test-result-base: "/home/ros_ws/ros_build/build"
+
+'':
+  log-base: "/home/ros_ws/ros_build/logs"
 ```
