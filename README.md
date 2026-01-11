@@ -151,10 +151,14 @@ build:
     - "/home/ros_ws/src"
   build-base: "/home/ros_ws/ros_build/build"
   install-base: "/home/ros_ws/ros_build/install"
+  cmake-args:
+    - -DCMAKE_BUILD_TYPE=RelWithDebInfo
+    - -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
 test:
   build-base: "/home/ros_ws/ros_build/build"
   install-base: "/home/ros_ws/ros_build/install"
+  log-base: "/home/ros_ws/ros_build/logs"
   event-handlers:
     - console_direct+
 
