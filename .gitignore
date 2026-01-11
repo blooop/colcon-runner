@@ -173,3 +173,4 @@ test_suite_analysis/metadata.json
 ros_ws/**
 
 .devpod/
+.devpod-internal/
