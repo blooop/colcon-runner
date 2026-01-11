@@ -9,8 +9,8 @@ license = "MIT"
 dependencies = []
 
 [project.urls]
-Source = "https://github.com/blooop/colcon_runner"
-Home = "https://github.com/blooop/colcon_runner"
+Source = "https://github.com/blooop/colcon-runner"
+Home = "https://github.com/blooop/colcon-runner"
 
 [project.scripts]
 cr = "colcon_runner.colcon_runner:main"
