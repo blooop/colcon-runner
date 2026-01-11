@@ -4,6 +4,7 @@
         "dockerfile": "Dockerfile",
         "context": ".."
     },
+    "initializeCommand": ".devcontainer/claude-code/init-host.sh",
     "customizations": {
         "vscode": {
             "settings": {},
@@ -18,7 +19,6 @@
         }
     },
 	"features": {
-        "ghcr.io/devcontainers/features/node":{},
 		"./claude-code": {}
 
         // "ghcr.io/devcontainers/features/docker-in-docker:2": {}
