@@ -5,6 +5,6 @@
     "ms-python.vscode-pylance",
     "jjjermiah.pixi-vscode",
     "charliermarsh.ruff",
-    "tamasfe.even-better-toml",
+    "tamasfe.even-better-toml"
   ]
 }
