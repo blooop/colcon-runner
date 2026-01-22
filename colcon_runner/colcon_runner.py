@@ -471,6 +471,45 @@ def _build_rosdep_cmd(spec: str, pkg: Optional[str]) -> List[str]:
     return _build_cmd("rosdep", "", spec, pkg)
 
 
+def _get_shell_integration() -> str:
+    """Return shell integration code for auto-sourcing after builds."""
+    return '''
+# Colcon-runner shell integration for auto-sourcing
+# Added by: cr --install-shell-integration
+cr() {
+    # Run the actual cr command
+    command cr "$@"
+    local cr_exit_code=$?
+
+    # If successful and a build command was used, source the workspace
+    if [ $cr_exit_code -eq 0 ]; then
+        local build_used=false
+        for arg in "$@"; do
+            # Check if argument contains 'b' or 'B' and is not a flag
+            if [[ "$arg" =~ [bB] ]] && [[ ! "$arg" =~ ^- ]]; then
+                build_used=true
+                break
+            fi
+        done
+
+        if [ "$build_used" = true ]; then
+            # Look for install/setup.bash in current and parent directories
+            local dir="$PWD"
+            while [ "$dir" != "/" ]; do
+                if [ -f "$dir/install/setup.bash" ]; then
+                    source "$dir/install/setup.bash"
+                    break
+                fi
+                dir="$(dirname "$dir")"
+            done
+        fi
+    fi
+
+    return $cr_exit_code
+}
+'''
+
+
 def main(argv=None) -> None:
     if argv is None:
         argv = sys.argv[1:]
@@ -493,6 +532,11 @@ def main(argv=None) -> None:
             print(f"cr (colcon-runner) version {pkg_version}")
         except PackageNotFoundError:
             print("cr (colcon-runner) version unknown (not installed)")
+        sys.exit(0)
+
+    # Add --install-shell-integration support
+    if argv[0] == "--install-shell-integration":
+        print(_get_shell_integration())
         sys.exit(0)
 
     try:
