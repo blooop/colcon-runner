@@ -473,7 +473,7 @@ def _build_rosdep_cmd(spec: str, pkg: Optional[str]) -> List[str]:
 
 def _get_shell_integration() -> str:
     """Return shell integration code for auto-sourcing after builds."""
-    return '''
+    return """
 # Colcon-runner shell integration for auto-sourcing
 # Added by: cr --install-shell-integration
 cr() {
@@ -507,7 +507,7 @@ cr() {
 
     return $cr_exit_code
 }
-'''
+"""
 
 
 def main(argv=None) -> None:
