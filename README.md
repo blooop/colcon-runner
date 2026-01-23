@@ -23,18 +23,16 @@ pip install colcon-runner
 
 ### Enable Auto-Source After Commands (Optional)
 
-To automatically re-source your environment after any successful `cr` command, add this shell integration:
+To automatically re-source your environment after any successful `cr` command, install the shell integration:
 
 ```bash
-# Check if integration is already installed, then add if not present
-if ! grep -q "cr --install-shell-integration" ~/.bashrc; then
-  cr --install-shell-integration >> ~/.bashrc
-  echo "Shell integration added to ~/.bashrc"
-fi
-source ~/.bashrc
+cr --install-shell-integration
+source ~/.bashrc  # Or start a new terminal
 ```
 
 This will automatically re-source `~/.bashrc` after any successful `cr` command, ensuring your environment always reflects the latest workspace state while preserving your ROS installation and any underlay workspaces.
+
+The installation is idempotent - running it multiple times is safe and won't create duplicates.
 
 ```
 CR(1)                         User Commands                        CR(1)

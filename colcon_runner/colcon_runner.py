@@ -494,6 +494,39 @@ cr() {
 """
 
 
+def _install_shell_integration() -> None:
+    """Install shell integration to ~/.bashrc, idempotently."""
+    bashrc_path = os.path.expanduser("~/.bashrc")
+
+    # Check if bashrc exists
+    if not os.path.exists(bashrc_path):
+        print(f"Creating {bashrc_path}")
+        with open(bashrc_path, "w") as f:
+            f.write("# .bashrc\n\n")
+
+    # Read current bashrc
+    with open(bashrc_path, "r") as f:
+        bashrc_content = f.read()
+
+    # Check if integration is already installed
+    marker = "# Colcon-runner shell integration for auto-sourcing"
+    if marker in bashrc_content:
+        print("Shell integration is already installed in ~/.bashrc")
+        print("To update, remove the existing cr() function and run this command again.")
+        return
+
+    # Get the shell integration code
+    integration_code = _get_shell_integration()
+
+    # Append to bashrc
+    with open(bashrc_path, "a") as f:
+        f.write("\n" + integration_code + "\n")
+
+    print("✓ Shell integration installed to ~/.bashrc")
+    print("To activate, run: source ~/.bashrc")
+    print("Or start a new terminal session.")
+
+
 def main(argv=None) -> None:
     if argv is None:
         argv = sys.argv[1:]
@@ -522,7 +555,7 @@ def main(argv=None) -> None:
 
     # Add --install-shell-integration support
     if argv[0] == "--install-shell-integration":
-        print(_get_shell_integration())
+        _install_shell_integration()
         sys.exit(0)
 
     try:
