@@ -760,5 +760,131 @@ class ErrorHandlingTests(unittest.TestCase):
         self.assertIn("RuntimeError", stderr)
 
 
+class ShellIntegrationTests(unittest.TestCase):
+    """Test shell integration functionality."""
+
+    def test_get_shell_integration(self):
+        """Test that _get_shell_integration returns valid bash function."""
+        integration = colcon_runner._get_shell_integration()
+
+        # Check it contains the function definition
+        self.assertIn("cr()", integration)
+        self.assertIn("command cr", integration)
+        self.assertIn("source ~/.bashrc", integration)
+        self.assertIn("return $cr_exit_code", integration)
+
+        # Check it has the marker comment
+        self.assertIn("# Colcon-runner shell integration for auto-sourcing", integration)
+        self.assertIn("# Added by: cr --install-shell-integration", integration)
+
+    def test_install_shell_integration_flag(self):
+        """Test --install-shell-integration flag."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bashrc_path = os.path.join(temp_dir, ".bashrc")
+
+            # Mock the home directory
+            with mock.patch.dict(os.environ, {"HOME": temp_dir}):
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    with self.assertRaises(SystemExit) as cm:
+                        colcon_runner.main(["--install-shell-integration"])
+
+                self.assertEqual(cm.exception.code, 0)
+                output = buf.getvalue()
+
+                # Check success message
+                self.assertIn("✓ Shell integration installed to ~/.bashrc", output)
+                self.assertIn("source ~/.bashrc", output)
+
+                # Verify bashrc was created and contains the function
+                self.assertTrue(os.path.exists(bashrc_path))
+                with open(bashrc_path, "r") as f:
+                    content = f.read()
+                    self.assertIn("cr()", content)
+                    self.assertIn("command cr", content)
+                    self.assertIn("source ~/.bashrc", content)
+
+    def test_install_shell_integration_idempotent(self):
+        """Test that installing shell integration twice is idempotent."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bashrc_path = os.path.join(temp_dir, ".bashrc")
+
+            with mock.patch.dict(os.environ, {"HOME": temp_dir}):
+                # First installation
+                buf1 = io.StringIO()
+                with contextlib.redirect_stdout(buf1):
+                    with self.assertRaises(SystemExit) as cm:
+                        colcon_runner.main(["--install-shell-integration"])
+                self.assertEqual(cm.exception.code, 0)
+
+                # Second installation
+                buf2 = io.StringIO()
+                with contextlib.redirect_stdout(buf2):
+                    with self.assertRaises(SystemExit) as cm:
+                        colcon_runner.main(["--install-shell-integration"])
+                self.assertEqual(cm.exception.code, 0)
+
+                output2 = buf2.getvalue()
+                self.assertIn("Shell integration is already installed", output2)
+
+                # Verify only one function exists
+                with open(bashrc_path, "r") as f:
+                    content = f.read()
+                    self.assertEqual(content.count("cr()"), 1)
+
+    def test_install_shell_integration_preserves_existing_bashrc(self):
+        """Test that existing bashrc content is preserved."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bashrc_path = os.path.join(temp_dir, ".bashrc")
+
+            # Create existing bashrc with content
+            existing_content = "# My custom bashrc\nexport MY_VAR=123\nalias ll='ls -l'\n"
+            with open(bashrc_path, "w") as f:
+                f.write(existing_content)
+
+            with mock.patch.dict(os.environ, {"HOME": temp_dir}):
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    with self.assertRaises(SystemExit) as cm:
+                        colcon_runner.main(["--install-shell-integration"])
+
+                self.assertEqual(cm.exception.code, 0)
+
+                # Verify existing content is preserved
+                with open(bashrc_path, "r") as f:
+                    content = f.read()
+                    self.assertIn(existing_content, content)
+                    self.assertIn("export MY_VAR=123", content)
+                    self.assertIn("alias ll='ls -l'", content)
+                    self.assertIn("cr()", content)
+
+    def test_install_shell_integration_creates_bashrc_if_missing(self):
+        """Test that ~/.bashrc is created if it doesn't exist."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bashrc_path = os.path.join(temp_dir, ".bashrc")
+
+            # Ensure bashrc doesn't exist
+            self.assertFalse(os.path.exists(bashrc_path))
+
+            with mock.patch.dict(os.environ, {"HOME": temp_dir}):
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    with self.assertRaises(SystemExit) as cm:
+                        colcon_runner.main(["--install-shell-integration"])
+
+                self.assertEqual(cm.exception.code, 0)
+                output = buf.getvalue()
+
+                # Check that it reports creating bashrc
+                self.assertIn(f"Creating {bashrc_path}", output)
+
+                # Verify bashrc was created
+                self.assertTrue(os.path.exists(bashrc_path))
+                with open(bashrc_path, "r") as f:
+                    content = f.read()
+                    self.assertIn("# .bashrc", content)
+                    self.assertIn("cr()", content)
+
+
 if __name__ == "__main__":  # pragma: no cover — run the tests
     unittest.main(verbosity=2)
