@@ -770,7 +770,7 @@ class ShellIntegrationTests(unittest.TestCase):
         # Check it contains the function definition
         self.assertIn("cr()", integration)
         self.assertIn("command cr", integration)
-        self.assertIn("source ~/.bashrc", integration)
+        self.assertIn('source "$HOME/.bashrc"', integration)
         self.assertIn("return $cr_exit_code", integration)
 
         # Check it has the marker comment
@@ -793,7 +793,7 @@ class ShellIntegrationTests(unittest.TestCase):
                 output = buf.getvalue()
 
                 # Check success message
-                self.assertIn("✓ Shell integration installed to ~/.bashrc", output)
+                self.assertIn("Shell integration installed to ~/.bashrc", output)
                 self.assertIn("source ~/.bashrc", output)
 
                 # Verify bashrc was created and contains the function
@@ -802,7 +802,7 @@ class ShellIntegrationTests(unittest.TestCase):
                     content = f.read()
                     self.assertIn("cr()", content)
                     self.assertIn("command cr", content)
-                    self.assertIn("source ~/.bashrc", content)
+                    self.assertIn('source "$HOME/.bashrc"', content)
 
     def test_install_shell_integration_idempotent(self):
         """Test that installing shell integration twice is idempotent."""

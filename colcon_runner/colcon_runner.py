@@ -9,6 +9,7 @@ SYNOPSIS
     cr VERB [PKG] [OPTIONS]
     cr --help | -h
     cr --version | -v
+    cr --install-shell-integration
 
 DESCRIPTION
     A minimal wrapper around colcon providing short, mnemonic commands
@@ -106,6 +107,17 @@ USAGE EXAMPLES
     cr cabuto
         Clean all, build up to 'pkg1', and test only 'pkg1'.
 
+
+OPTIONS
+    --help, -h
+        Show this help message and exit.
+
+    --version, -v
+        Show the version number and exit.
+
+    --install-shell-integration
+        Install bash shell integration to ~/.bashrc for auto-sourcing
+        after successful cr commands.
 
 NOTES
     - The 's' verb sets a default package name stored in a configuration file.
@@ -484,8 +496,8 @@ cr() {
 
     # Re-source bashrc after any successful command to pick up workspace changes
     if [ $cr_exit_code -eq 0 ]; then
-        if [ -f ~/.bashrc ]; then
-            source ~/.bashrc
+        if [ -f "$HOME/.bashrc" ]; then
+            source "$HOME/.bashrc"
         fi
     fi
 
@@ -501,11 +513,11 @@ def _install_shell_integration() -> None:
     # Check if bashrc exists
     if not os.path.exists(bashrc_path):
         print(f"Creating {bashrc_path}")
-        with open(bashrc_path, "w") as f:
+        with open(bashrc_path, "w", encoding="utf-8") as f:
             f.write("# .bashrc\n\n")
 
     # Read current bashrc
-    with open(bashrc_path, "r") as f:
+    with open(bashrc_path, "r", encoding="utf-8", errors="replace") as f:
         bashrc_content = f.read()
 
     # Check if integration is already installed
@@ -519,10 +531,10 @@ def _install_shell_integration() -> None:
     integration_code = _get_shell_integration()
 
     # Append to bashrc
-    with open(bashrc_path, "a") as f:
+    with open(bashrc_path, "a", encoding="utf-8") as f:
         f.write("\n" + integration_code + "\n")
 
-    print("✓ Shell integration installed to ~/.bashrc")
+    print("Shell integration installed to ~/.bashrc")
     print("To activate, run: source ~/.bashrc")
     print("Or start a new terminal session.")
 
@@ -555,8 +567,17 @@ def main(argv=None) -> None:
 
     # Add --install-shell-integration support
     if argv[0] == "--install-shell-integration":
-        _install_shell_integration()
-        sys.exit(0)
+        try:
+            _install_shell_integration()
+            sys.exit(0)
+        except (OSError, IOError, PermissionError) as e:
+            error(f"OS error while installing shell integration: {e}")
+        except KeyboardInterrupt:
+            print("\nInterrupted by user", file=sys.stderr)
+            sys.exit(130)
+        except Exception as e:
+            traceback.print_exc(file=sys.stderr)
+            error(f"unexpected error: {e}")
 
     try:
         cmds: str = argv[0]
