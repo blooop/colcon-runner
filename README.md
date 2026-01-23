@@ -21,16 +21,20 @@ You can install colcon-runner using pip:
 pip install colcon-runner
 ```
 
-### Enable Auto-Source After Build (Optional)
+### Enable Auto-Source After Commands (Optional)
 
-To automatically source your workspace after builds, run this one-time setup:
+To automatically source your workspace after any successful `cr` command, add this shell integration:
 
 ```bash
-cr --install-shell-integration >> ~/.bashrc
+# Check if integration is already installed, then add if not present
+if ! grep -q "cr --install-shell-integration" ~/.bashrc; then
+  cr --install-shell-integration >> ~/.bashrc
+  echo "Shell integration added to ~/.bashrc"
+fi
 source ~/.bashrc
 ```
 
-Now `cr b` will automatically source `install/setup.bash` after successful builds!
+This will automatically source `install/setup.bash` after any successful `cr` command when a workspace is found.
 
 ```
 CR(1)                         User Commands                        CR(1)

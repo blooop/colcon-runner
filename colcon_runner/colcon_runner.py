@@ -472,37 +472,27 @@ def _build_rosdep_cmd(spec: str, pkg: Optional[str]) -> List[str]:
 
 
 def _get_shell_integration() -> str:
-    """Return shell integration code for auto-sourcing after builds."""
+    """Return shell integration code for auto-sourcing workspace."""
     return """
 # Colcon-runner shell integration for auto-sourcing
 # Added by: cr --install-shell-integration
+# WARNING: This will override any existing 'cr' function or alias
 cr() {
     # Run the actual cr command
     command cr "$@"
     local cr_exit_code=$?
 
-    # If successful and a build command was used, source the workspace
+    # Always source the workspace after any successful command
     if [ $cr_exit_code -eq 0 ]; then
-        local build_used=false
-        for arg in "$@"; do
-            # Check if argument contains 'b' or 'B' and is not a flag
-            if [[ "$arg" =~ [bB] ]] && [[ ! "$arg" =~ ^- ]]; then
-                build_used=true
+        # Look for install/setup.bash in current and parent directories
+        local dir="$PWD"
+        while [ "$dir" != "/" ]; do
+            if [ -f "$dir/install/setup.bash" ]; then
+                source "$dir/install/setup.bash"
                 break
             fi
+            dir="$(dirname "$dir")"
         done
-
-        if [ "$build_used" = true ]; then
-            # Look for install/setup.bash in current and parent directories
-            local dir="$PWD"
-            while [ "$dir" != "/" ]; do
-                if [ -f "$dir/install/setup.bash" ]; then
-                    source "$dir/install/setup.bash"
-                    break
-                fi
-                dir="$(dirname "$dir")"
-            done
-        fi
     fi
 
     return $cr_exit_code
@@ -513,7 +503,9 @@ cr() {
 def main(argv=None) -> None:
     if argv is None:
         argv = sys.argv[1:]
-    if len(argv) < 1:
+
+    # Handle empty argv case first
+    if not argv:
         print(
             "No arguments provided. Running 'colcon build' by default.\nUse '--help' for more options."
         )
