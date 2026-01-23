@@ -23,7 +23,7 @@ pip install colcon-runner
 
 ### Enable Auto-Source After Commands (Optional)
 
-To automatically source your workspace after any successful `cr` command, add this shell integration:
+To automatically re-source your environment after any successful `cr` command, add this shell integration:
 
 ```bash
 # Check if integration is already installed, then add if not present
@@ -34,7 +34,7 @@ fi
 source ~/.bashrc
 ```
 
-This will automatically source `install/setup.bash` after any successful `cr` command when a workspace is found.
+This will automatically re-source `~/.bashrc` after any successful `cr` command, ensuring your environment always reflects the latest workspace state while preserving your ROS installation and any underlay workspaces.
 
 ```
 CR(1)                         User Commands                        CR(1)

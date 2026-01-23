@@ -482,17 +482,11 @@ cr() {
     command cr "$@"
     local cr_exit_code=$?
 
-    # Always source the workspace after any successful command
+    # Re-source bashrc after any successful command to pick up workspace changes
     if [ $cr_exit_code -eq 0 ]; then
-        # Look for install/setup.bash in current and parent directories
-        local dir="$PWD"
-        while [ "$dir" != "/" ]; do
-            if [ -f "$dir/install/setup.bash" ]; then
-                source "$dir/install/setup.bash"
-                break
-            fi
-            dir="$(dirname "$dir")"
-        done
+        if [ -f ~/.bashrc ]; then
+            source ~/.bashrc
+        fi
     fi
 
     return $cr_exit_code
