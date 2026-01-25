@@ -82,9 +82,9 @@ colcon-core = ">=0.20.1"
 
 [tool.pixi.tasks]
 dev-add-docker = "devpod provider list | grep -qw docker || devpod provider add docker"
-dev = { cmd = "devpod up . --ide none && ssh pythontemplate.devpod", depends-on = ["dev-add-docker"] }
+dev = { cmd = "devpod up . --ide none && ssh colcon_runner.devpod", depends-on = ["dev-add-docker"] }
 dev-vs = { cmd = "devpod up . --ide vscode", depends-on = ["dev-add-docker"] }
-dev-restart = { cmd = "devpod up . --recreate --ide none && ssh pythontemplate.devpod", depends-on = ["dev-add-docker"] }
+dev-restart = { cmd = "devpod up . --recreate --ide none && ssh colcon_runner.devpod", depends-on = ["dev-add-docker"] }
 dev-restart-vs = { cmd = "devpod up . --recreate --ide vscode", depends-on = ["dev-add-docker"] }
 prek = "prek run -a"
 prek-update = "prek autoupdate"
