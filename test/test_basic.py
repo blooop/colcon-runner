@@ -765,6 +765,7 @@ class ShellIntegrationTests(unittest.TestCase):
 
     def test_get_shell_integration(self):
         """Test that _get_shell_integration returns valid bash function."""
+        # pylint: disable=protected-access
         integration = colcon_runner._get_shell_integration()
 
         # Check it contains the function definition
@@ -798,7 +799,7 @@ class ShellIntegrationTests(unittest.TestCase):
 
                 # Verify bashrc was created and contains the function
                 self.assertTrue(os.path.exists(bashrc_path))
-                with open(bashrc_path, "r") as f:
+                with open(bashrc_path, "r", encoding="utf-8") as f:
                     content = f.read()
                     self.assertIn("cr()", content)
                     self.assertIn("command cr", content)
@@ -828,7 +829,7 @@ class ShellIntegrationTests(unittest.TestCase):
                 self.assertIn("Shell integration is already installed", output2)
 
                 # Verify only one function exists
-                with open(bashrc_path, "r") as f:
+                with open(bashrc_path, "r", encoding="utf-8") as f:
                     content = f.read()
                     self.assertEqual(content.count("cr()"), 1)
 
@@ -839,7 +840,7 @@ class ShellIntegrationTests(unittest.TestCase):
 
             # Create existing bashrc with content
             existing_content = "# My custom bashrc\nexport MY_VAR=123\nalias ll='ls -l'\n"
-            with open(bashrc_path, "w") as f:
+            with open(bashrc_path, "w", encoding="utf-8") as f:
                 f.write(existing_content)
 
             with mock.patch.dict(os.environ, {"HOME": temp_dir}):
@@ -851,7 +852,7 @@ class ShellIntegrationTests(unittest.TestCase):
                 self.assertEqual(cm.exception.code, 0)
 
                 # Verify existing content is preserved
-                with open(bashrc_path, "r") as f:
+                with open(bashrc_path, "r", encoding="utf-8") as f:
                     content = f.read()
                     self.assertIn(existing_content, content)
                     self.assertIn("export MY_VAR=123", content)
@@ -880,7 +881,7 @@ class ShellIntegrationTests(unittest.TestCase):
 
                 # Verify bashrc was created
                 self.assertTrue(os.path.exists(bashrc_path))
-                with open(bashrc_path, "r") as f:
+                with open(bashrc_path, "r", encoding="utf-8") as f:
                     content = f.read()
                     self.assertIn("# .bashrc", content)
                     self.assertIn("cr()", content)
