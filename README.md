@@ -44,6 +44,7 @@ SYNOPSIS
     cr VERB [PKG] [OPTIONS]
     cr --help | -h
     cr --version | -v
+    cr --install-shell-integration
 
 DESCRIPTION
     A minimal wrapper around colcon providing short, mnemonic commands
@@ -144,6 +145,17 @@ USAGE EXAMPLES
     cr cabuto
         Clean all, build up to 'pkg1', and test only 'pkg1'.
 
+
+OPTIONS
+    --help, -h
+        Show this help message and exit.
+
+    --version, -v
+        Show the version number and exit.
+
+    --install-shell-integration
+        Install bash shell integration to ~/.bashrc for auto-sourcing
+        after successful cr commands.
 
 NOTES
     - The 's' verb sets a default package name stored in a configuration file.
