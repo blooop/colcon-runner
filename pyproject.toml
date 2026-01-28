@@ -16,12 +16,14 @@ Home = "https://github.com/blooop/colcon-runner"
 cr = "colcon_runner.colcon_runner:main"
 
 [tool.pixi.workspace]
-channels = ["conda-forge"]
+channels = ["conda-forge", "https://prefix.dev/blooop"]
 platforms = ["linux-64"]
 
 [tool.pixi.dependencies]
 python = ">=3.10"
 shellcheck = ">=0.10.0,<0.11"
+devpod = ">=0.8.0,<0.9"
+gh = ">=2.63.0"
 
 [tool.pixi.feature.py310.dependencies]
 python = "3.10.*"
@@ -31,7 +33,6 @@ python = "3.11.*"
 python = "3.12.*"
 [tool.pixi.feature.py313.dependencies]
 python = "3.13.*"
-
 
 [tool.pixi.pypi-dependencies]
 colcon-runner = { path = ".", editable = true }
@@ -48,11 +49,11 @@ test = [
   "pylint>=3.2.5,<=4.0.4",
   "pytest-cov>=4.1,<=7.0.0",
   "pytest>=7.4,<=9.0.2",
-  "hypothesis>=6.104.2,<=6.148.9",
-  "ruff>=0.5.0,<=0.14.10",
+  "hypothesis>=6.104.2,<=6.150.2",
+  "ruff>=0.5.0,<=0.14.13",
   "coverage>=7.5.4,<=7.13.1",
-  "pre-commit<=4.5.1",
-  "ty>=0.0.8,<=0.0.8",
+  "prek>=0.2.28,<0.3.0",
+  "ty>=0.0.12,<=0.0.12",
 ]
 
 [build-system]
@@ -79,16 +80,20 @@ pkg-config = "*"
 gtest = ">=1.14"
 colcon-core = ">=0.20.1"
 
-
 [tool.pixi.tasks]
-pre-commit = "pre-commit run -a"
-pre-commit-update = "pre-commit autoupdate"
+dev-add-docker = "devpod provider list | grep -qw docker || devpod provider add docker"
+dev = { cmd = "devpod up . --ide none && ssh colcon_runner.devpod", depends-on = ["dev-add-docker"] }
+dev-vs = { cmd = "devpod up . --ide vscode", depends-on = ["dev-add-docker"] }
+dev-restart = { cmd = "devpod up . --recreate --ide none && ssh colcon_runner.devpod", depends-on = ["dev-add-docker"] }
+dev-restart-vs = { cmd = "devpod up . --recreate --ide vscode", depends-on = ["dev-add-docker"] }
+prek = "prek run -a"
+prek-update = "prek autoupdate"
 format = "ruff format ."
 check-clean-workspace = "git diff --exit-code"
 ruff-lint = "ruff check . --fix"
 pylint = "pylint --version && echo 'running pylint...' && pylint $(git ls-files '*.py')"
-ty = "ty check"
-lint = { depends-on = ["ruff-lint", "pylint", "ty"] }
+ty = "ty check --respect-ignore-files ."
+lint = { depends-on = ["ruff-lint", "ty", "pylint"] }
 style = { depends-on = ["format", "lint"] }
 commit-format = "git commit -a -m'autoformat code' || true"
 test = "pytest"
@@ -97,7 +102,7 @@ coverage-report = "coverage report -m"
 update-lock = "pixi update && git commit -a -m'update pixi.lock' || true"
 push = "git push"
 update-lock-push = { depends-on = ["update-lock", "push"] }
-fix = { depends-on = ["update-lock", "format", "ruff-lint", "pre-commit"] }
+fix = { depends-on = ["update-lock", "format", "ruff-lint", "prek"] }
 fix-commit-push = { depends-on = ["fix", "commit-format", "update-lock-push"] }
 ci-no-cover = { depends-on = ["style", "test"] }
 ci = { depends-on = [
