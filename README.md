@@ -21,6 +21,19 @@ You can install colcon-runner using pip:
 pip install colcon-runner
 ```
 
+### Enable Auto-Source After Commands (Optional)
+
+To automatically re-source your environment after any successful `cr` command, install the shell integration:
+
+```bash
+cr --install-shell-integration
+source ~/.bashrc  # Or start a new terminal
+```
+
+This will automatically re-source `~/.bashrc` after any successful `cr` command, ensuring your environment always reflects the latest workspace state while preserving your ROS installation and any underlay workspaces.
+
+The installation is idempotent - running it multiple times is safe and won't create duplicates.
+
 ```
 CR(1)                         User Commands                        CR(1)
 
@@ -31,6 +44,7 @@ SYNOPSIS
     cr VERB [PKG] [OPTIONS]
     cr --help | -h
     cr --version | -v
+    cr --install-shell-integration
 
 DESCRIPTION
     A minimal wrapper around colcon providing short, mnemonic commands
@@ -131,6 +145,17 @@ USAGE EXAMPLES
     cr cabuto
         Clean all, build up to 'pkg1', and test only 'pkg1'.
 
+
+OPTIONS
+    --help, -h
+        Show this help message and exit.
+
+    --version, -v
+        Show the version number and exit.
+
+    --install-shell-integration
+        Install bash shell integration to ~/.bashrc for auto-sourcing
+        after successful cr commands.
 
 NOTES
     - The 's' verb sets a default package name stored in a configuration file.

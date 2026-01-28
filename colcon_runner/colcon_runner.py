@@ -9,6 +9,7 @@ SYNOPSIS
     cr VERB [PKG] [OPTIONS]
     cr --help | -h
     cr --version | -v
+    cr --install-shell-integration
 
 DESCRIPTION
     A minimal wrapper around colcon providing short, mnemonic commands
@@ -106,6 +107,17 @@ USAGE EXAMPLES
     cr cabuto
         Clean all, build up to 'pkg1', and test only 'pkg1'.
 
+
+OPTIONS
+    --help, -h
+        Show this help message and exit.
+
+    --version, -v
+        Show the version number and exit.
+
+    --install-shell-integration
+        Install bash shell integration to ~/.bashrc for auto-sourcing
+        after successful cr commands.
 
 NOTES
     - The 's' verb sets a default package name stored in a configuration file.
@@ -471,10 +483,68 @@ def _build_rosdep_cmd(spec: str, pkg: Optional[str]) -> List[str]:
     return _build_cmd("rosdep", "", spec, pkg)
 
 
+def _get_shell_integration() -> str:
+    """Return shell integration code for auto-sourcing workspace."""
+    return """
+# Colcon-runner shell integration for auto-sourcing
+# Added by: cr --install-shell-integration
+# WARNING: This will override any existing 'cr' function or alias
+cr() {
+    # Run the actual cr command
+    command cr "$@"
+    local cr_exit_code=$?
+
+    # Re-source bashrc after any successful command to pick up workspace changes
+    if [ $cr_exit_code -eq 0 ]; then
+        if [ -f "$HOME/.bashrc" ]; then
+            source "$HOME/.bashrc"
+        fi
+    fi
+
+    return $cr_exit_code
+}
+"""
+
+
+def _install_shell_integration() -> None:
+    """Install shell integration to ~/.bashrc, idempotently."""
+    bashrc_path = os.path.expanduser("~/.bashrc")
+
+    # Check if bashrc exists
+    if not os.path.exists(bashrc_path):
+        print(f"Creating {bashrc_path}")
+        with open(bashrc_path, "w", encoding="utf-8") as f:
+            f.write("# .bashrc\n\n")
+
+    # Read current bashrc
+    with open(bashrc_path, "r", encoding="utf-8", errors="replace") as f:
+        bashrc_content = f.read()
+
+    # Check if integration is already installed
+    marker = "# Colcon-runner shell integration for auto-sourcing"
+    if marker in bashrc_content:
+        print("Shell integration is already installed in ~/.bashrc")
+        print("To update, remove the existing cr() function and run this command again.")
+        return
+
+    # Get the shell integration code
+    integration_code = _get_shell_integration()
+
+    # Append to bashrc
+    with open(bashrc_path, "a", encoding="utf-8") as f:
+        f.write("\n" + integration_code + "\n")
+
+    print("Shell integration installed to ~/.bashrc")
+    print("To activate, run: source ~/.bashrc")
+    print("Or start a new terminal session.")
+
+
 def main(argv=None) -> None:
     if argv is None:
         argv = sys.argv[1:]
-    if len(argv) < 1:
+
+    # Handle empty argv case first
+    if not argv:
         print(
             "No arguments provided. Running 'colcon build' by default.\nUse '--help' for more options."
         )
@@ -494,6 +564,20 @@ def main(argv=None) -> None:
         except PackageNotFoundError:
             print("cr (colcon-runner) version unknown (not installed)")
         sys.exit(0)
+
+    # Add --install-shell-integration support
+    if argv[0] == "--install-shell-integration":
+        try:
+            _install_shell_integration()
+            sys.exit(0)
+        except (OSError, IOError, PermissionError) as e:
+            error(f"OS error while installing shell integration: {e}")
+        except KeyboardInterrupt:
+            print("\nInterrupted by user", file=sys.stderr)
+            sys.exit(130)
+        except Exception as e:
+            traceback.print_exc(file=sys.stderr)
+            error(f"unexpected error: {e}")
 
     try:
         cmds: str = argv[0]
