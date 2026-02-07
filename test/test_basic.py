@@ -1032,6 +1032,37 @@ class PackageListingTests(unittest.TestCase):
             self.assertEqual(packages.count("pkg_a"), 1)
             self.assertEqual(len(packages), 3)
 
+    def test_list_packages_skips_build_dirs(self):
+        """Test that _list_packages skips packages in build/install/log/test_result."""
+        # pylint: disable=protected-access
+        for skip_dir in ("build", "install", "log", "test_result"):
+            pkg_dir = os.path.join(self.test_dir, skip_dir, f"pkg_in_{skip_dir}")
+            os.makedirs(pkg_dir)
+            with open(os.path.join(pkg_dir, "package.xml"), "w", encoding="utf-8") as f:
+                f.write(f'<?xml version="1.0"?>\n<package><name>pkg_in_{skip_dir}</name></package>')
+
+        with mock.patch.object(colcon_runner, "_find_workspace_root", return_value=self.test_dir):
+            packages = colcon_runner._list_packages()
+
+        for skip_dir in ("build", "install", "log", "test_result"):
+            self.assertNotIn(f"pkg_in_{skip_dir}", packages)
+        self.assertEqual(len(packages), 3)
+
+    def test_list_packages_outside_src(self):
+        """Test that packages outside src/ are found when workspace root has no src/."""
+        # pylint: disable=protected-access
+        workspace = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(workspace))
+
+        pkg_dir = os.path.join(workspace, "my_pkg")
+        os.makedirs(pkg_dir)
+        with open(os.path.join(pkg_dir, "package.xml"), "w", encoding="utf-8") as f:
+            f.write('<?xml version="1.0"?>\n<package><name>my_pkg</name></package>')
+
+        with mock.patch.object(colcon_runner, "_find_workspace_root", return_value=workspace):
+            packages = colcon_runner._list_packages()
+            self.assertIn("my_pkg", packages)
+
     def test_list_packages_no_src_directory(self):
         """Test that _list_packages returns [] when no src directory exists."""
         # pylint: disable=protected-access

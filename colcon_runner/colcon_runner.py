@@ -326,7 +326,7 @@ def _list_packages() -> List[str]:
                 name_elem = tree.find("name")
                 if name_elem is not None and name_elem.text:
                     packages.append(name_elem.text.strip())
-            except ET.ParseError:
+            except (ET.ParseError, OSError):
                 continue
 
     return sorted(set(packages))
