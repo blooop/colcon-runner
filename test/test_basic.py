@@ -815,12 +815,8 @@ class ShellIntegrationTests(unittest.TestCase):
                 # Verify only one integration block exists
                 with open(bashrc_path, "r", encoding="utf-8") as f:
                     content = f.read()
-                    self.assertEqual(
-                        content.count("# Colcon-runner shell integration v"), 1
-                    )
-                    self.assertEqual(
-                        content.count("complete -F _cr_completions cr"), 1
-                    )
+                    self.assertEqual(content.count("# Colcon-runner shell integration v"), 1)
+                    self.assertEqual(content.count("complete -F _cr_completions cr"), 1)
 
     def test_install_shell_integration_preserves_existing_bashrc(self):
         """Test that existing bashrc content is preserved."""
@@ -905,9 +901,7 @@ class ShellIntegrationTests(unittest.TestCase):
                     self.assertNotIn("v0.9.0", content)
                     self.assertIn("# Colcon-runner shell integration v", content)
                     self.assertIn("--workspace-root", content)
-                    self.assertEqual(
-                        content.count("# Colcon-runner shell integration v"), 1
-                    )
+                    self.assertEqual(content.count("# Colcon-runner shell integration v"), 1)
 
 
 class PackageListingTests(unittest.TestCase):
