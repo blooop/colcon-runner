@@ -1155,6 +1155,7 @@ class WorkspaceRootFlagTests(unittest.TestCase):
                     colcon_runner.main(["--workspace-root"])
 
             self.assertEqual(cm.exception.code, 1)
+            self.assertEqual(buf.getvalue().strip(), "")
 
 
 class RemoveShellIntegrationTests(unittest.TestCase):

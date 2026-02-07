@@ -535,9 +535,10 @@ cr() {{
     local ret=$?
     if [ $ret -eq 0 ] && [[ "${{1:-}}" != -* ]]; then
         local ws
-        ws=$(command cr --workspace-root 2>/dev/null)
-        if [ -f "$ws/install/setup.bash" ]; then
-            source "$ws/install/setup.bash"
+        if ws=$(command cr --workspace-root 2>/dev/null) && [ -n "$ws" ]; then
+            if [ -f "$ws/install/setup.bash" ]; then
+                source "$ws/install/setup.bash"
+            fi
         fi
     fi
     return $ret
