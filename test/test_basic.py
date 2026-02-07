@@ -761,29 +761,15 @@ class ErrorHandlingTests(unittest.TestCase):
 
 
 class ShellIntegrationTests(unittest.TestCase):
-    """Test shell integration functionality."""
+    """Test shell integration functionality (eval pattern)."""
 
-    def test_get_shell_integration(self):
-        """Test that _get_shell_integration returns valid bash function."""
-        # pylint: disable=protected-access
-        integration = colcon_runner._get_shell_integration()
+    EVAL_LINE = 'eval "$(command cr --init-bash)"'
 
-        # Check it contains the function definition
-        self.assertIn("cr()", integration)
-        self.assertIn("command cr", integration)
-        self.assertIn('source "$HOME/.bashrc"', integration)
-        self.assertIn("return $cr_exit_code", integration)
-
-        # Check it has the marker comment
-        self.assertIn("# Colcon-runner shell integration for auto-sourcing", integration)
-        self.assertIn("# Added by: cr --install-shell-integration", integration)
-
-    def test_install_shell_integration_flag(self):
-        """Test --install-shell-integration flag."""
+    def test_install_shell_integration_fresh(self):
+        """Test --install-shell-integration on a fresh bashrc."""
         with tempfile.TemporaryDirectory() as temp_dir:
             bashrc_path = os.path.join(temp_dir, ".bashrc")
 
-            # Mock the home directory
             with mock.patch.dict(os.environ, {"HOME": temp_dir}):
                 buf = io.StringIO()
                 with contextlib.redirect_stdout(buf):
@@ -793,17 +779,16 @@ class ShellIntegrationTests(unittest.TestCase):
                 self.assertEqual(cm.exception.code, 0)
                 output = buf.getvalue()
 
-                # Check success message
                 self.assertIn("Shell integration installed to ~/.bashrc", output)
                 self.assertIn("source ~/.bashrc", output)
 
-                # Verify bashrc was created and contains the function
                 self.assertTrue(os.path.exists(bashrc_path))
                 with open(bashrc_path, "r", encoding="utf-8") as f:
                     content = f.read()
-                    self.assertIn("cr()", content)
-                    self.assertIn("command cr", content)
-                    self.assertIn('source "$HOME/.bashrc"', content)
+                    self.assertIn(self.EVAL_LINE, content)
+                    # Should NOT contain old-style cr() wrapper
+                    self.assertNotIn("cr()", content)
+                    self.assertNotIn('source "$HOME/.bashrc"', content)
 
     def test_install_shell_integration_idempotent(self):
         """Test that installing shell integration twice is idempotent."""
@@ -828,17 +813,16 @@ class ShellIntegrationTests(unittest.TestCase):
                 output2 = buf2.getvalue()
                 self.assertIn("Shell integration is already installed", output2)
 
-                # Verify only one function exists
+                # Verify only one eval line exists
                 with open(bashrc_path, "r", encoding="utf-8") as f:
                     content = f.read()
-                    self.assertEqual(content.count("cr()"), 1)
+                    self.assertEqual(content.count(self.EVAL_LINE), 1)
 
     def test_install_shell_integration_preserves_existing_bashrc(self):
         """Test that existing bashrc content is preserved."""
         with tempfile.TemporaryDirectory() as temp_dir:
             bashrc_path = os.path.join(temp_dir, ".bashrc")
 
-            # Create existing bashrc with content
             existing_content = "# My custom bashrc\nexport MY_VAR=123\nalias ll='ls -l'\n"
             with open(bashrc_path, "w", encoding="utf-8") as f:
                 f.write(existing_content)
@@ -851,20 +835,17 @@ class ShellIntegrationTests(unittest.TestCase):
 
                 self.assertEqual(cm.exception.code, 0)
 
-                # Verify existing content is preserved
                 with open(bashrc_path, "r", encoding="utf-8") as f:
                     content = f.read()
-                    self.assertIn(existing_content, content)
                     self.assertIn("export MY_VAR=123", content)
                     self.assertIn("alias ll='ls -l'", content)
-                    self.assertIn("cr()", content)
+                    self.assertIn(self.EVAL_LINE, content)
 
     def test_install_shell_integration_creates_bashrc_if_missing(self):
         """Test that ~/.bashrc is created if it doesn't exist."""
         with tempfile.TemporaryDirectory() as temp_dir:
             bashrc_path = os.path.join(temp_dir, ".bashrc")
 
-            # Ensure bashrc doesn't exist
             self.assertFalse(os.path.exists(bashrc_path))
 
             with mock.patch.dict(os.environ, {"HOME": temp_dir}):
@@ -875,16 +856,368 @@ class ShellIntegrationTests(unittest.TestCase):
 
                 self.assertEqual(cm.exception.code, 0)
                 output = buf.getvalue()
-
-                # Check that it reports creating bashrc
                 self.assertIn(f"Creating {bashrc_path}", output)
 
-                # Verify bashrc was created
                 self.assertTrue(os.path.exists(bashrc_path))
                 with open(bashrc_path, "r", encoding="utf-8") as f:
                     content = f.read()
                     self.assertIn("# .bashrc", content)
-                    self.assertIn("cr()", content)
+                    self.assertIn(self.EVAL_LINE, content)
+
+    def test_migration_removes_old_blocks_adds_eval(self):
+        """Test migration from old inline blocks to eval pattern."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bashrc_path = os.path.join(temp_dir, ".bashrc")
+
+            old_bashrc = (
+                "# My config\nexport FOO=bar\n\n"
+                "# Colcon-runner shell integration for auto-sourcing\n"
+                "# Added by: cr --install-shell-integration\n"
+                "cr() {\n"
+                '    command cr "$@"\n'
+                "    local cr_exit_code=$?\n"
+                "    return $cr_exit_code\n"
+                "}\n\n"
+                "# Colcon-runner bash completion\n"
+                "# Added by: cr --install-shell-integration\n"
+                "_cr_completions() {\n"
+                "    COMPREPLY=()\n"
+                "}\n"
+                "complete -F _cr_completions cr\n"
+            )
+            with open(bashrc_path, "w", encoding="utf-8") as f:
+                f.write(old_bashrc)
+
+            with mock.patch.dict(os.environ, {"HOME": temp_dir}):
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    with self.assertRaises(SystemExit) as cm:
+                        colcon_runner.main(["--install-shell-integration"])
+
+                self.assertEqual(cm.exception.code, 0)
+                output = buf.getvalue()
+                self.assertIn("Migrated", output)
+
+                with open(bashrc_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    self.assertIn(self.EVAL_LINE, content)
+                    self.assertIn("export FOO=bar", content)
+                    # Old blocks should be gone
+                    self.assertNotIn("cr()", content)
+                    self.assertNotIn("_cr_completions()", content)
+
+    def test_migration_old_blocks_and_eval_already_present(self):
+        """Test that old blocks are removed even when eval is already present."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bashrc_path = os.path.join(temp_dir, ".bashrc")
+
+            old_bashrc = (
+                "# My config\n\n"
+                "# Colcon-runner shell integration for auto-sourcing\n"
+                "cr() {\n"
+                '    command cr "$@"\n'
+                "}\n\n"
+                f"{self.EVAL_LINE}\n"
+            )
+            with open(bashrc_path, "w", encoding="utf-8") as f:
+                f.write(old_bashrc)
+
+            with mock.patch.dict(os.environ, {"HOME": temp_dir}):
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    with self.assertRaises(SystemExit) as cm:
+                        colcon_runner.main(["--install-shell-integration"])
+
+                self.assertEqual(cm.exception.code, 0)
+                output = buf.getvalue()
+                self.assertIn("Migrated", output)
+
+                with open(bashrc_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    self.assertIn(self.EVAL_LINE, content)
+                    self.assertEqual(content.count(self.EVAL_LINE), 1)
+                    self.assertNotIn("cr()", content)
+
+
+class PackageListingTests(unittest.TestCase):
+    """Test package listing functionality for shell completion."""
+
+    def setUp(self):
+        # Create temp workspace with package.xml files
+        self.test_dir = tempfile.mkdtemp()
+        self.src_dir = os.path.join(self.test_dir, "src")
+        os.makedirs(self.src_dir)
+
+        for pkg_name in ["pkg_a", "pkg_b", "pkg_c"]:
+            pkg_dir = os.path.join(self.src_dir, pkg_name)
+            os.makedirs(pkg_dir)
+            with open(os.path.join(pkg_dir, "package.xml"), "w", encoding="utf-8") as f:
+                f.write(f'<?xml version="1.0"?>\n<package><name>{pkg_name}</name></package>')
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir)
+
+    def test_list_packages_finds_all(self):
+        """Test that _list_packages finds all packages in workspace."""
+        # pylint: disable=protected-access
+        with mock.patch.object(colcon_runner, "_find_workspace_root", return_value=self.test_dir):
+            packages = colcon_runner._list_packages()
+            self.assertEqual(packages, ["pkg_a", "pkg_b", "pkg_c"])
+
+    def test_list_packages_handles_nested_packages(self):
+        """Test packages in nested directories (e.g., src/group/pkg)."""
+        # pylint: disable=protected-access
+        # Create a nested package
+        nested_dir = os.path.join(self.src_dir, "group", "nested_pkg")
+        os.makedirs(nested_dir)
+        with open(os.path.join(nested_dir, "package.xml"), "w", encoding="utf-8") as f:
+            f.write('<?xml version="1.0"?>\n<package><name>nested_pkg</name></package>')
+
+        with mock.patch.object(colcon_runner, "_find_workspace_root", return_value=self.test_dir):
+            packages = colcon_runner._list_packages()
+            self.assertIn("nested_pkg", packages)
+            self.assertEqual(len(packages), 4)  # pkg_a, pkg_b, pkg_c, nested_pkg
+
+    def test_list_packages_handles_malformed_xml(self):
+        """Test that malformed package.xml files are skipped without error."""
+        # pylint: disable=protected-access
+        # Create a malformed package.xml
+        bad_pkg_dir = os.path.join(self.src_dir, "bad_pkg")
+        os.makedirs(bad_pkg_dir)
+        with open(os.path.join(bad_pkg_dir, "package.xml"), "w", encoding="utf-8") as f:
+            f.write("not valid xml <<<<")
+
+        with mock.patch.object(colcon_runner, "_find_workspace_root", return_value=self.test_dir):
+            packages = colcon_runner._list_packages()
+            # Should still find the valid packages
+            self.assertEqual(packages, ["pkg_a", "pkg_b", "pkg_c"])
+
+    def test_list_packages_handles_missing_name_element(self):
+        """Test that package.xml without <name> is skipped."""
+        # pylint: disable=protected-access
+        # Create a package.xml without name element
+        no_name_dir = os.path.join(self.src_dir, "no_name_pkg")
+        os.makedirs(no_name_dir)
+        with open(os.path.join(no_name_dir, "package.xml"), "w", encoding="utf-8") as f:
+            f.write('<?xml version="1.0"?>\n<package><version>1.0</version></package>')
+
+        with mock.patch.object(colcon_runner, "_find_workspace_root", return_value=self.test_dir):
+            packages = colcon_runner._list_packages()
+            # Should still find the valid packages
+            self.assertEqual(packages, ["pkg_a", "pkg_b", "pkg_c"])
+
+    def test_list_packages_quiet_on_no_workspace(self):
+        """Test that _list_packages returns [] when workspace not found."""
+        # pylint: disable=protected-access
+        with mock.patch.object(
+            colcon_runner,
+            "_find_workspace_root",
+            side_effect=colcon_runner.ParseError("No workspace"),
+        ):
+            packages = colcon_runner._list_packages()
+            self.assertEqual(packages, [])
+
+    def test_list_packages_deduplicates(self):
+        """Test that same package name in multiple locations appears once."""
+        # pylint: disable=protected-access
+        # Create duplicate package name in different location
+        dup_dir = os.path.join(self.src_dir, "another", "pkg_a")
+        os.makedirs(dup_dir)
+        with open(os.path.join(dup_dir, "package.xml"), "w", encoding="utf-8") as f:
+            f.write('<?xml version="1.0"?>\n<package><name>pkg_a</name></package>')
+
+        with mock.patch.object(colcon_runner, "_find_workspace_root", return_value=self.test_dir):
+            packages = colcon_runner._list_packages()
+            # pkg_a should appear only once
+            self.assertEqual(packages.count("pkg_a"), 1)
+            self.assertEqual(len(packages), 3)
+
+    def test_list_packages_skips_build_dirs(self):
+        """Test that _list_packages skips packages in build/install/log/test_result."""
+        # pylint: disable=protected-access
+        for skip_dir in ("build", "install", "log", "test_result"):
+            pkg_dir = os.path.join(self.test_dir, skip_dir, f"pkg_in_{skip_dir}")
+            os.makedirs(pkg_dir)
+            with open(os.path.join(pkg_dir, "package.xml"), "w", encoding="utf-8") as f:
+                f.write(f'<?xml version="1.0"?>\n<package><name>pkg_in_{skip_dir}</name></package>')
+
+        with mock.patch.object(colcon_runner, "_find_workspace_root", return_value=self.test_dir):
+            packages = colcon_runner._list_packages()
+
+        for skip_dir in ("build", "install", "log", "test_result"):
+            self.assertNotIn(f"pkg_in_{skip_dir}", packages)
+        self.assertEqual(len(packages), 3)
+
+    def test_list_packages_outside_src(self):
+        """Test that packages outside src/ are found when workspace root has no src/."""
+        # pylint: disable=protected-access
+        workspace = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(workspace))
+
+        pkg_dir = os.path.join(workspace, "my_pkg")
+        os.makedirs(pkg_dir)
+        with open(os.path.join(pkg_dir, "package.xml"), "w", encoding="utf-8") as f:
+            f.write('<?xml version="1.0"?>\n<package><name>my_pkg</name></package>')
+
+        with mock.patch.object(colcon_runner, "_find_workspace_root", return_value=workspace):
+            packages = colcon_runner._list_packages()
+            self.assertIn("my_pkg", packages)
+
+    def test_list_packages_no_src_directory(self):
+        """Test that _list_packages returns [] when no src directory exists."""
+        # pylint: disable=protected-access
+        # Create a workspace without src dir
+        empty_workspace = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(empty_workspace))
+
+        with mock.patch.object(colcon_runner, "_find_workspace_root", return_value=empty_workspace):
+            packages = colcon_runner._list_packages()
+            self.assertEqual(packages, [])
+
+    def test_list_packages_cli_flag(self):
+        """Test that `cr --list-packages` outputs package names."""
+        with mock.patch.object(colcon_runner, "_find_workspace_root", return_value=self.test_dir):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                with self.assertRaises(SystemExit) as cm:
+                    colcon_runner.main(["--list-packages"])
+
+            self.assertEqual(cm.exception.code, 0)
+            output = buf.getvalue()
+            # Check output contains package names, one per line
+            self.assertIn("pkg_a\n", output)
+            self.assertIn("pkg_b\n", output)
+            self.assertIn("pkg_c\n", output)
+
+    def test_list_packages_handles_whitespace_in_name(self):
+        """Test that package names with whitespace are trimmed."""
+        # pylint: disable=protected-access
+        # Create a package with whitespace in name element
+        ws_dir = os.path.join(self.src_dir, "whitespace_pkg")
+        os.makedirs(ws_dir)
+        with open(os.path.join(ws_dir, "package.xml"), "w", encoding="utf-8") as f:
+            f.write('<?xml version="1.0"?>\n<package><name>  whitespace_pkg  </name></package>')
+
+        with mock.patch.object(colcon_runner, "_find_workspace_root", return_value=self.test_dir):
+            packages = colcon_runner._list_packages()
+            self.assertIn("whitespace_pkg", packages)
+            # Ensure no whitespace version exists
+            self.assertNotIn("  whitespace_pkg  ", packages)
+
+
+class InitBashTests(unittest.TestCase):
+    """Test _get_init_bash() output and --init-bash flag."""
+
+    def test_init_bash_contains_completion(self):
+        """Test that _get_init_bash returns a valid completion script."""
+        # pylint: disable=protected-access
+        script = colcon_runner._get_init_bash()
+
+        self.assertIn("_cr_completions()", script)
+        self.assertIn("--list-packages", script)
+        self.assertIn("complete -F _cr_completions cr", script)
+        self.assertIn("COMP_CWORD -eq 2", script)
+
+    def test_init_bash_no_wrapper_function(self):
+        """Test that _get_init_bash does NOT contain a cr() wrapper or re-sourcing."""
+        # pylint: disable=protected-access
+        script = colcon_runner._get_init_bash()
+
+        # Must not define a cr() shell function
+        self.assertNotIn("\ncr()", script)
+        self.assertNotIn("cr() {", script)
+        # Must not re-source bashrc
+        self.assertNotIn('source "$HOME/.bashrc"', script)
+
+    def test_init_bash_flag_outputs_script(self):
+        """Test that `cr --init-bash` prints the completion script and exits 0."""
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            with self.assertRaises(SystemExit) as cm:
+                colcon_runner.main(["--init-bash"])
+
+        self.assertEqual(cm.exception.code, 0)
+        output = buf.getvalue()
+        self.assertIn("_cr_completions()", output)
+        self.assertIn("complete -F _cr_completions cr", output)
+
+
+class RemoveOldShellBlocksTests(unittest.TestCase):
+    """Test _remove_old_shell_blocks() block removal."""
+
+    # pylint: disable=protected-access
+
+    def test_removes_shell_integration_block(self):
+        content = (
+            "# before\n"
+            "# Colcon-runner shell integration for auto-sourcing\n"
+            "# Added by: cr --install-shell-integration\n"
+            "cr() {\n"
+            '    command cr "$@"\n'
+            "}\n"
+            "# after\n"
+        )
+        cleaned, modified = colcon_runner._remove_old_shell_blocks(content)
+        self.assertTrue(modified)
+        self.assertIn("# before", cleaned)
+        self.assertIn("# after", cleaned)
+        self.assertNotIn("cr()", cleaned)
+
+    def test_removes_completion_block(self):
+        content = (
+            "# before\n"
+            "# Colcon-runner bash completion\n"
+            "_cr_completions() {\n"
+            "    COMPREPLY=()\n"
+            "}\n"
+            "complete -F _cr_completions cr\n"
+            "# after\n"
+        )
+        cleaned, modified = colcon_runner._remove_old_shell_blocks(content)
+        self.assertTrue(modified)
+        self.assertIn("# before", cleaned)
+        self.assertIn("# after", cleaned)
+        self.assertNotIn("_cr_completions", cleaned)
+
+    def test_removes_both_blocks(self):
+        content = (
+            "export A=1\n\n"
+            "# Colcon-runner shell integration for auto-sourcing\n"
+            "cr() {\n"
+            '    command cr "$@"\n'
+            "}\n\n"
+            "# Colcon-runner bash completion\n"
+            "_cr_completions() {\n"
+            "    COMPREPLY=()\n"
+            "}\n"
+            "complete -F _cr_completions cr\n\n"
+            "export B=2\n"
+        )
+        cleaned, modified = colcon_runner._remove_old_shell_blocks(content)
+        self.assertTrue(modified)
+        self.assertIn("export A=1", cleaned)
+        self.assertIn("export B=2", cleaned)
+        self.assertNotIn("cr()", cleaned)
+        self.assertNotIn("_cr_completions", cleaned)
+
+    def test_no_blocks_returns_unmodified(self):
+        content = "# My bashrc\nexport PATH=/usr/bin\n"
+        cleaned, modified = colcon_runner._remove_old_shell_blocks(content)
+        self.assertFalse(modified)
+        self.assertEqual(cleaned, content)
+
+    def test_preserves_surrounding_content(self):
+        content = (
+            "alias ls='ls --color'\n"
+            "# Colcon-runner shell integration for auto-sourcing\n"
+            "cr() {\n"
+            "}\n"
+            "alias grep='grep --color'\n"
+        )
+        cleaned, modified = colcon_runner._remove_old_shell_blocks(content)
+        self.assertTrue(modified)
+        self.assertIn("alias ls='ls --color'", cleaned)
+        self.assertIn("alias grep='grep --color'", cleaned)
 
 
 if __name__ == "__main__":  # pragma: no cover — run the tests
