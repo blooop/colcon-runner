@@ -761,33 +761,15 @@ class ErrorHandlingTests(unittest.TestCase):
 
 
 class ShellIntegrationTests(unittest.TestCase):
-    """Test shell integration functionality."""
+    """Test shell integration functionality (eval pattern)."""
 
-    def test_get_shell_integration(self):
-        """Test that _get_shell_integration returns valid bash function."""
-        # pylint: disable=protected-access
-        integration = colcon_runner._get_shell_integration()
+    EVAL_LINE = 'eval "$(command cr --init-bash)"'
 
-        # Check it contains the function definition
-        self.assertIn("cr()", integration)
-        self.assertIn("command cr", integration)
-        self.assertIn('source "$HOME/.bashrc"', integration)
-        self.assertIn("return $cr_exit_code", integration)
-
-        # Check it skips re-source for flag arguments (--version, --help, etc.)
-        self.assertIn("--*", integration)
-        self.assertIn("-*", integration)
-
-        # Check it has the marker comment
-        self.assertIn("# Colcon-runner shell integration for auto-sourcing", integration)
-        self.assertIn("# Added by: cr --install-shell-integration", integration)
-
-    def test_install_shell_integration_flag(self):
-        """Test --install-shell-integration flag."""
+    def test_install_shell_integration_fresh(self):
+        """Test --install-shell-integration on a fresh bashrc."""
         with tempfile.TemporaryDirectory() as temp_dir:
             bashrc_path = os.path.join(temp_dir, ".bashrc")
 
-            # Mock the home directory
             with mock.patch.dict(os.environ, {"HOME": temp_dir}):
                 buf = io.StringIO()
                 with contextlib.redirect_stdout(buf):
@@ -797,17 +779,16 @@ class ShellIntegrationTests(unittest.TestCase):
                 self.assertEqual(cm.exception.code, 0)
                 output = buf.getvalue()
 
-                # Check success message
                 self.assertIn("Shell integration installed to ~/.bashrc", output)
                 self.assertIn("source ~/.bashrc", output)
 
-                # Verify bashrc was created and contains the function
                 self.assertTrue(os.path.exists(bashrc_path))
                 with open(bashrc_path, "r", encoding="utf-8") as f:
                     content = f.read()
-                    self.assertIn("cr()", content)
-                    self.assertIn("command cr", content)
-                    self.assertIn('source "$HOME/.bashrc"', content)
+                    self.assertIn(self.EVAL_LINE, content)
+                    # Should NOT contain old-style cr() wrapper
+                    self.assertNotIn("cr()", content)
+                    self.assertNotIn('source "$HOME/.bashrc"', content)
 
     def test_install_shell_integration_idempotent(self):
         """Test that installing shell integration twice is idempotent."""
@@ -832,17 +813,16 @@ class ShellIntegrationTests(unittest.TestCase):
                 output2 = buf2.getvalue()
                 self.assertIn("Shell integration is already installed", output2)
 
-                # Verify only one function exists
+                # Verify only one eval line exists
                 with open(bashrc_path, "r", encoding="utf-8") as f:
                     content = f.read()
-                    self.assertEqual(content.count("cr()"), 1)
+                    self.assertEqual(content.count(self.EVAL_LINE), 1)
 
     def test_install_shell_integration_preserves_existing_bashrc(self):
         """Test that existing bashrc content is preserved."""
         with tempfile.TemporaryDirectory() as temp_dir:
             bashrc_path = os.path.join(temp_dir, ".bashrc")
 
-            # Create existing bashrc with content
             existing_content = "# My custom bashrc\nexport MY_VAR=123\nalias ll='ls -l'\n"
             with open(bashrc_path, "w", encoding="utf-8") as f:
                 f.write(existing_content)
@@ -855,20 +835,17 @@ class ShellIntegrationTests(unittest.TestCase):
 
                 self.assertEqual(cm.exception.code, 0)
 
-                # Verify existing content is preserved
                 with open(bashrc_path, "r", encoding="utf-8") as f:
                     content = f.read()
-                    self.assertIn(existing_content, content)
                     self.assertIn("export MY_VAR=123", content)
                     self.assertIn("alias ll='ls -l'", content)
-                    self.assertIn("cr()", content)
+                    self.assertIn(self.EVAL_LINE, content)
 
     def test_install_shell_integration_creates_bashrc_if_missing(self):
         """Test that ~/.bashrc is created if it doesn't exist."""
         with tempfile.TemporaryDirectory() as temp_dir:
             bashrc_path = os.path.join(temp_dir, ".bashrc")
 
-            # Ensure bashrc doesn't exist
             self.assertFalse(os.path.exists(bashrc_path))
 
             with mock.patch.dict(os.environ, {"HOME": temp_dir}):
@@ -879,16 +856,87 @@ class ShellIntegrationTests(unittest.TestCase):
 
                 self.assertEqual(cm.exception.code, 0)
                 output = buf.getvalue()
-
-                # Check that it reports creating bashrc
                 self.assertIn(f"Creating {bashrc_path}", output)
 
-                # Verify bashrc was created
                 self.assertTrue(os.path.exists(bashrc_path))
                 with open(bashrc_path, "r", encoding="utf-8") as f:
                     content = f.read()
                     self.assertIn("# .bashrc", content)
-                    self.assertIn("cr()", content)
+                    self.assertIn(self.EVAL_LINE, content)
+
+    def test_migration_removes_old_blocks_adds_eval(self):
+        """Test migration from old inline blocks to eval pattern."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bashrc_path = os.path.join(temp_dir, ".bashrc")
+
+            old_bashrc = (
+                "# My config\nexport FOO=bar\n\n"
+                "# Colcon-runner shell integration for auto-sourcing\n"
+                "# Added by: cr --install-shell-integration\n"
+                "cr() {\n"
+                '    command cr "$@"\n'
+                "    local cr_exit_code=$?\n"
+                "    return $cr_exit_code\n"
+                "}\n\n"
+                "# Colcon-runner bash completion\n"
+                "# Added by: cr --install-shell-integration\n"
+                "_cr_completions() {\n"
+                "    COMPREPLY=()\n"
+                "}\n"
+                "complete -F _cr_completions cr\n"
+            )
+            with open(bashrc_path, "w", encoding="utf-8") as f:
+                f.write(old_bashrc)
+
+            with mock.patch.dict(os.environ, {"HOME": temp_dir}):
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    with self.assertRaises(SystemExit) as cm:
+                        colcon_runner.main(["--install-shell-integration"])
+
+                self.assertEqual(cm.exception.code, 0)
+                output = buf.getvalue()
+                self.assertIn("Migrated", output)
+
+                with open(bashrc_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    self.assertIn(self.EVAL_LINE, content)
+                    self.assertIn("export FOO=bar", content)
+                    # Old blocks should be gone
+                    self.assertNotIn("cr()", content)
+                    self.assertNotIn("_cr_completions()", content)
+
+    def test_migration_old_blocks_and_eval_already_present(self):
+        """Test that old blocks are removed even when eval is already present."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bashrc_path = os.path.join(temp_dir, ".bashrc")
+
+            old_bashrc = (
+                "# My config\n\n"
+                "# Colcon-runner shell integration for auto-sourcing\n"
+                "cr() {\n"
+                '    command cr "$@"\n'
+                "}\n\n"
+                f"{self.EVAL_LINE}\n"
+            )
+            with open(bashrc_path, "w", encoding="utf-8") as f:
+                f.write(old_bashrc)
+
+            with mock.patch.dict(os.environ, {"HOME": temp_dir}):
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    with self.assertRaises(SystemExit) as cm:
+                        colcon_runner.main(["--install-shell-integration"])
+
+                self.assertEqual(cm.exception.code, 0)
+                output = buf.getvalue()
+                self.assertIn("Migrated", output)
+
+                with open(bashrc_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    self.assertIn(self.EVAL_LINE, content)
+                    self.assertEqual(content.count(self.EVAL_LINE), 1)
+                    self.assertNotIn("cr()", content)
 
 
 class PackageListingTests(unittest.TestCase):
@@ -1026,107 +1074,119 @@ class PackageListingTests(unittest.TestCase):
             self.assertNotIn("  whitespace_pkg  ", packages)
 
 
-class CompletionTests(unittest.TestCase):
-    """Test bash completion functionality."""
+class InitBashTests(unittest.TestCase):
+    """Test _get_init_bash() output and --init-bash flag."""
 
-    def test_bash_completion_script_structure(self):
-        """Test that completion script contains required elements."""
+    def test_init_bash_contains_completion(self):
+        """Test that _get_init_bash returns a valid completion script."""
         # pylint: disable=protected-access
-        completion = colcon_runner._get_bash_completion()
+        script = colcon_runner._get_init_bash()
 
-        # Check marker
-        self.assertIn("# Colcon-runner bash completion", completion)
-        self.assertIn("# Added by: cr --install-shell-integration", completion)
+        self.assertIn("_cr_completions()", script)
+        self.assertIn("--list-packages", script)
+        self.assertIn("complete -F _cr_completions cr", script)
+        self.assertIn("COMP_CWORD -eq 2", script)
 
-        # Check function definition
-        self.assertIn("_cr_completions()", completion)
+    def test_init_bash_no_wrapper_function(self):
+        """Test that _get_init_bash does NOT contain a cr() wrapper or re-sourcing."""
+        # pylint: disable=protected-access
+        script = colcon_runner._get_init_bash()
 
-        # Check it uses --list-packages
-        self.assertIn("--list-packages", completion)
+        # Must not define a cr() shell function
+        self.assertNotIn("\ncr()", script)
+        self.assertNotIn("cr() {", script)
+        # Must not re-source bashrc
+        self.assertNotIn('source "$HOME/.bashrc"', script)
 
-        # Check complete command
-        self.assertIn("complete -F _cr_completions cr", completion)
+    def test_init_bash_flag_outputs_script(self):
+        """Test that `cr --init-bash` prints the completion script and exits 0."""
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            with self.assertRaises(SystemExit) as cm:
+                colcon_runner.main(["--init-bash"])
 
-        # Check it completes at position 2
-        self.assertIn("COMP_CWORD -eq 2", completion)
+        self.assertEqual(cm.exception.code, 0)
+        output = buf.getvalue()
+        self.assertIn("_cr_completions()", output)
+        self.assertIn("complete -F _cr_completions cr", output)
 
-    def test_install_adds_completion(self):
-        """Test --install-shell-integration adds completion script to bashrc."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            bashrc_path = os.path.join(temp_dir, ".bashrc")
 
-            with mock.patch.dict(os.environ, {"HOME": temp_dir}):
-                buf = io.StringIO()
-                with contextlib.redirect_stdout(buf):
-                    with self.assertRaises(SystemExit) as cm:
-                        colcon_runner.main(["--install-shell-integration"])
+class RemoveOldShellBlocksTests(unittest.TestCase):
+    """Test _remove_old_shell_blocks() block removal."""
 
-                self.assertEqual(cm.exception.code, 0)
+    # pylint: disable=protected-access
 
-                # Verify bashrc contains completion
-                with open(bashrc_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                    self.assertIn("_cr_completions", content)
-                    self.assertIn("complete -F _cr_completions cr", content)
-                    self.assertIn("# Colcon-runner bash completion", content)
+    def test_removes_shell_integration_block(self):
+        content = (
+            "# before\n"
+            "# Colcon-runner shell integration for auto-sourcing\n"
+            "# Added by: cr --install-shell-integration\n"
+            "cr() {\n"
+            '    command cr "$@"\n'
+            "}\n"
+            "# after\n"
+        )
+        cleaned, modified = colcon_runner._remove_old_shell_blocks(content)
+        self.assertTrue(modified)
+        self.assertIn("# before", cleaned)
+        self.assertIn("# after", cleaned)
+        self.assertNotIn("cr()", cleaned)
 
-    def test_install_idempotent_with_completion(self):
-        """Test that running twice doesn't duplicate completion script."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            bashrc_path = os.path.join(temp_dir, ".bashrc")
+    def test_removes_completion_block(self):
+        content = (
+            "# before\n"
+            "# Colcon-runner bash completion\n"
+            "_cr_completions() {\n"
+            "    COMPREPLY=()\n"
+            "}\n"
+            "complete -F _cr_completions cr\n"
+            "# after\n"
+        )
+        cleaned, modified = colcon_runner._remove_old_shell_blocks(content)
+        self.assertTrue(modified)
+        self.assertIn("# before", cleaned)
+        self.assertIn("# after", cleaned)
+        self.assertNotIn("_cr_completions", cleaned)
 
-            with mock.patch.dict(os.environ, {"HOME": temp_dir}):
-                # First installation
-                buf1 = io.StringIO()
-                with contextlib.redirect_stdout(buf1):
-                    with self.assertRaises(SystemExit) as cm:
-                        colcon_runner.main(["--install-shell-integration"])
-                self.assertEqual(cm.exception.code, 0)
+    def test_removes_both_blocks(self):
+        content = (
+            "export A=1\n\n"
+            "# Colcon-runner shell integration for auto-sourcing\n"
+            "cr() {\n"
+            '    command cr "$@"\n'
+            "}\n\n"
+            "# Colcon-runner bash completion\n"
+            "_cr_completions() {\n"
+            "    COMPREPLY=()\n"
+            "}\n"
+            "complete -F _cr_completions cr\n\n"
+            "export B=2\n"
+        )
+        cleaned, modified = colcon_runner._remove_old_shell_blocks(content)
+        self.assertTrue(modified)
+        self.assertIn("export A=1", cleaned)
+        self.assertIn("export B=2", cleaned)
+        self.assertNotIn("cr()", cleaned)
+        self.assertNotIn("_cr_completions", cleaned)
 
-                # Second installation
-                buf2 = io.StringIO()
-                with contextlib.redirect_stdout(buf2):
-                    with self.assertRaises(SystemExit) as cm:
-                        colcon_runner.main(["--install-shell-integration"])
-                self.assertEqual(cm.exception.code, 0)
+    def test_no_blocks_returns_unmodified(self):
+        content = "# My bashrc\nexport PATH=/usr/bin\n"
+        cleaned, modified = colcon_runner._remove_old_shell_blocks(content)
+        self.assertFalse(modified)
+        self.assertEqual(cleaned, content)
 
-                output2 = buf2.getvalue()
-                self.assertIn("Shell integration is already installed", output2)
-
-                # Verify only one completion function exists
-                with open(bashrc_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                    self.assertEqual(content.count("_cr_completions()"), 1)
-                    self.assertEqual(content.count("complete -F _cr_completions cr"), 1)
-
-    def test_install_adds_completion_to_existing_shell_integration(self):
-        """Test that completion is added if only shell function exists."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            bashrc_path = os.path.join(temp_dir, ".bashrc")
-
-            # Create bashrc with only shell function (no completion)
-            # pylint: disable=protected-access
-            shell_integration = colcon_runner._get_shell_integration()
-            with open(bashrc_path, "w", encoding="utf-8") as f:
-                f.write(shell_integration)
-
-            with mock.patch.dict(os.environ, {"HOME": temp_dir}):
-                buf = io.StringIO()
-                with contextlib.redirect_stdout(buf):
-                    with self.assertRaises(SystemExit) as cm:
-                        colcon_runner.main(["--install-shell-integration"])
-
-                self.assertEqual(cm.exception.code, 0)
-                output = buf.getvalue()
-                # Should not say "already installed" since completion is new
-                self.assertIn("Shell integration installed", output)
-
-                # Verify completion was added
-                with open(bashrc_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                    self.assertIn("_cr_completions", content)
-                    # Shell function should still be there (once)
-                    self.assertEqual(content.count("cr()"), 1)
+    def test_preserves_surrounding_content(self):
+        content = (
+            "alias ls='ls --color'\n"
+            "# Colcon-runner shell integration for auto-sourcing\n"
+            "cr() {\n"
+            "}\n"
+            "alias grep='grep --color'\n"
+        )
+        cleaned, modified = colcon_runner._remove_old_shell_blocks(content)
+        self.assertTrue(modified)
+        self.assertIn("alias ls='ls --color'", cleaned)
+        self.assertIn("alias grep='grep --color'", cleaned)
 
 
 if __name__ == "__main__":  # pragma: no cover — run the tests
