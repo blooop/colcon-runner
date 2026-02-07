@@ -314,7 +314,11 @@ def _list_packages() -> List[str]:
 
     src_dir = os.path.join(workspace_root, "src")
     if not os.path.isdir(src_dir):
-        return []
+        # workspace_root may already point at the src directory
+        if os.path.basename(workspace_root) == "src" and os.path.isdir(workspace_root):
+            src_dir = workspace_root
+        else:
+            return []
 
     packages = []
     for root, _dirs, files in os.walk(src_dir):
