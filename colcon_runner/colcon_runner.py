@@ -9,7 +9,6 @@ SYNOPSIS
     cr VERB [PKG] [OPTIONS]
     cr --help | -h
     cr --version | -v
-    cr --init-bash
     cr --install-shell-integration
 
 DESCRIPTION
@@ -116,13 +115,8 @@ OPTIONS
     --version, -v
         Show the version number and exit.
 
-    --init-bash
-        Print the bash initialization script to stdout. Intended for
-        use in ~/.bashrc as: eval "$(command cr --init-bash)"
-
     --install-shell-integration
-        Add eval "$(command cr --init-bash)" to ~/.bashrc and remove
-        any old-style inline shell integration blocks.
+        Install bash completion and shell integration to ~/.bashrc.
 
 NOTES
     - The 's' verb sets a default package name stored in a configuration file.
