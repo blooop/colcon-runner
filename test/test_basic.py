@@ -887,5 +887,243 @@ class ShellIntegrationTests(unittest.TestCase):
                     self.assertIn("cr()", content)
 
 
+class PackageListingTests(unittest.TestCase):
+    """Test package listing functionality for shell completion."""
+
+    def setUp(self):
+        # Create temp workspace with package.xml files
+        self.test_dir = tempfile.mkdtemp()
+        self.src_dir = os.path.join(self.test_dir, "src")
+        os.makedirs(self.src_dir)
+
+        for pkg_name in ["pkg_a", "pkg_b", "pkg_c"]:
+            pkg_dir = os.path.join(self.src_dir, pkg_name)
+            os.makedirs(pkg_dir)
+            with open(os.path.join(pkg_dir, "package.xml"), "w", encoding="utf-8") as f:
+                f.write(f'<?xml version="1.0"?>\n<package><name>{pkg_name}</name></package>')
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir)
+
+    def test_list_packages_finds_all(self):
+        """Test that _list_packages finds all packages in workspace."""
+        # pylint: disable=protected-access
+        with mock.patch.object(colcon_runner, "_find_workspace_root", return_value=self.test_dir):
+            packages = colcon_runner._list_packages()
+            self.assertEqual(packages, ["pkg_a", "pkg_b", "pkg_c"])
+
+    def test_list_packages_handles_nested_packages(self):
+        """Test packages in nested directories (e.g., src/group/pkg)."""
+        # pylint: disable=protected-access
+        # Create a nested package
+        nested_dir = os.path.join(self.src_dir, "group", "nested_pkg")
+        os.makedirs(nested_dir)
+        with open(os.path.join(nested_dir, "package.xml"), "w", encoding="utf-8") as f:
+            f.write('<?xml version="1.0"?>\n<package><name>nested_pkg</name></package>')
+
+        with mock.patch.object(colcon_runner, "_find_workspace_root", return_value=self.test_dir):
+            packages = colcon_runner._list_packages()
+            self.assertIn("nested_pkg", packages)
+            self.assertEqual(len(packages), 4)  # pkg_a, pkg_b, pkg_c, nested_pkg
+
+    def test_list_packages_handles_malformed_xml(self):
+        """Test that malformed package.xml files are skipped without error."""
+        # pylint: disable=protected-access
+        # Create a malformed package.xml
+        bad_pkg_dir = os.path.join(self.src_dir, "bad_pkg")
+        os.makedirs(bad_pkg_dir)
+        with open(os.path.join(bad_pkg_dir, "package.xml"), "w", encoding="utf-8") as f:
+            f.write("not valid xml <<<<")
+
+        with mock.patch.object(colcon_runner, "_find_workspace_root", return_value=self.test_dir):
+            packages = colcon_runner._list_packages()
+            # Should still find the valid packages
+            self.assertEqual(packages, ["pkg_a", "pkg_b", "pkg_c"])
+
+    def test_list_packages_handles_missing_name_element(self):
+        """Test that package.xml without <name> is skipped."""
+        # pylint: disable=protected-access
+        # Create a package.xml without name element
+        no_name_dir = os.path.join(self.src_dir, "no_name_pkg")
+        os.makedirs(no_name_dir)
+        with open(os.path.join(no_name_dir, "package.xml"), "w", encoding="utf-8") as f:
+            f.write('<?xml version="1.0"?>\n<package><version>1.0</version></package>')
+
+        with mock.patch.object(colcon_runner, "_find_workspace_root", return_value=self.test_dir):
+            packages = colcon_runner._list_packages()
+            # Should still find the valid packages
+            self.assertEqual(packages, ["pkg_a", "pkg_b", "pkg_c"])
+
+    def test_list_packages_quiet_on_no_workspace(self):
+        """Test that _list_packages returns [] when workspace not found."""
+        # pylint: disable=protected-access
+        with mock.patch.object(
+            colcon_runner,
+            "_find_workspace_root",
+            side_effect=colcon_runner.ParseError("No workspace"),
+        ):
+            packages = colcon_runner._list_packages()
+            self.assertEqual(packages, [])
+
+    def test_list_packages_deduplicates(self):
+        """Test that same package name in multiple locations appears once."""
+        # pylint: disable=protected-access
+        # Create duplicate package name in different location
+        dup_dir = os.path.join(self.src_dir, "another", "pkg_a")
+        os.makedirs(dup_dir)
+        with open(os.path.join(dup_dir, "package.xml"), "w", encoding="utf-8") as f:
+            f.write('<?xml version="1.0"?>\n<package><name>pkg_a</name></package>')
+
+        with mock.patch.object(colcon_runner, "_find_workspace_root", return_value=self.test_dir):
+            packages = colcon_runner._list_packages()
+            # pkg_a should appear only once
+            self.assertEqual(packages.count("pkg_a"), 1)
+            self.assertEqual(len(packages), 3)
+
+    def test_list_packages_no_src_directory(self):
+        """Test that _list_packages returns [] when no src directory exists."""
+        # pylint: disable=protected-access
+        # Create a workspace without src dir
+        empty_workspace = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(empty_workspace))
+
+        with mock.patch.object(colcon_runner, "_find_workspace_root", return_value=empty_workspace):
+            packages = colcon_runner._list_packages()
+            self.assertEqual(packages, [])
+
+    def test_list_packages_cli_flag(self):
+        """Test that `cr --list-packages` outputs package names."""
+        with mock.patch.object(colcon_runner, "_find_workspace_root", return_value=self.test_dir):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                with self.assertRaises(SystemExit) as cm:
+                    colcon_runner.main(["--list-packages"])
+
+            self.assertEqual(cm.exception.code, 0)
+            output = buf.getvalue()
+            # Check output contains package names, one per line
+            self.assertIn("pkg_a\n", output)
+            self.assertIn("pkg_b\n", output)
+            self.assertIn("pkg_c\n", output)
+
+    def test_list_packages_handles_whitespace_in_name(self):
+        """Test that package names with whitespace are trimmed."""
+        # pylint: disable=protected-access
+        # Create a package with whitespace in name element
+        ws_dir = os.path.join(self.src_dir, "whitespace_pkg")
+        os.makedirs(ws_dir)
+        with open(os.path.join(ws_dir, "package.xml"), "w", encoding="utf-8") as f:
+            f.write('<?xml version="1.0"?>\n<package><name>  whitespace_pkg  </name></package>')
+
+        with mock.patch.object(colcon_runner, "_find_workspace_root", return_value=self.test_dir):
+            packages = colcon_runner._list_packages()
+            self.assertIn("whitespace_pkg", packages)
+            # Ensure no whitespace version exists
+            self.assertNotIn("  whitespace_pkg  ", packages)
+
+
+class CompletionTests(unittest.TestCase):
+    """Test bash completion functionality."""
+
+    def test_bash_completion_script_structure(self):
+        """Test that completion script contains required elements."""
+        # pylint: disable=protected-access
+        completion = colcon_runner._get_bash_completion()
+
+        # Check marker
+        self.assertIn("# Colcon-runner bash completion", completion)
+        self.assertIn("# Added by: cr --install-shell-integration", completion)
+
+        # Check function definition
+        self.assertIn("_cr_completions()", completion)
+
+        # Check it uses --list-packages
+        self.assertIn("--list-packages", completion)
+
+        # Check complete command
+        self.assertIn("complete -F _cr_completions cr", completion)
+
+        # Check it completes at position 2
+        self.assertIn("cword -eq 2", completion)
+
+    def test_install_adds_completion(self):
+        """Test --install-shell-integration adds completion script to bashrc."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bashrc_path = os.path.join(temp_dir, ".bashrc")
+
+            with mock.patch.dict(os.environ, {"HOME": temp_dir}):
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    with self.assertRaises(SystemExit) as cm:
+                        colcon_runner.main(["--install-shell-integration"])
+
+                self.assertEqual(cm.exception.code, 0)
+
+                # Verify bashrc contains completion
+                with open(bashrc_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    self.assertIn("_cr_completions", content)
+                    self.assertIn("complete -F _cr_completions cr", content)
+                    self.assertIn("# Colcon-runner bash completion", content)
+
+    def test_install_idempotent_with_completion(self):
+        """Test that running twice doesn't duplicate completion script."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bashrc_path = os.path.join(temp_dir, ".bashrc")
+
+            with mock.patch.dict(os.environ, {"HOME": temp_dir}):
+                # First installation
+                buf1 = io.StringIO()
+                with contextlib.redirect_stdout(buf1):
+                    with self.assertRaises(SystemExit) as cm:
+                        colcon_runner.main(["--install-shell-integration"])
+                self.assertEqual(cm.exception.code, 0)
+
+                # Second installation
+                buf2 = io.StringIO()
+                with contextlib.redirect_stdout(buf2):
+                    with self.assertRaises(SystemExit) as cm:
+                        colcon_runner.main(["--install-shell-integration"])
+                self.assertEqual(cm.exception.code, 0)
+
+                output2 = buf2.getvalue()
+                self.assertIn("Shell integration is already installed", output2)
+
+                # Verify only one completion function exists
+                with open(bashrc_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    self.assertEqual(content.count("_cr_completions()"), 1)
+                    self.assertEqual(content.count("complete -F _cr_completions cr"), 1)
+
+    def test_install_adds_completion_to_existing_shell_integration(self):
+        """Test that completion is added if only shell function exists."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bashrc_path = os.path.join(temp_dir, ".bashrc")
+
+            # Create bashrc with only shell function (no completion)
+            # pylint: disable=protected-access
+            shell_integration = colcon_runner._get_shell_integration()
+            with open(bashrc_path, "w", encoding="utf-8") as f:
+                f.write(shell_integration)
+
+            with mock.patch.dict(os.environ, {"HOME": temp_dir}):
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    with self.assertRaises(SystemExit) as cm:
+                        colcon_runner.main(["--install-shell-integration"])
+
+                self.assertEqual(cm.exception.code, 0)
+                output = buf.getvalue()
+                # Should not say "already installed" since completion is new
+                self.assertIn("Shell integration installed", output)
+
+                # Verify completion was added
+                with open(bashrc_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    self.assertIn("_cr_completions", content)
+                    # Shell function should still be there (once)
+                    self.assertEqual(content.count("cr()"), 1)
+
+
 if __name__ == "__main__":  # pragma: no cover — run the tests
     unittest.main(verbosity=2)

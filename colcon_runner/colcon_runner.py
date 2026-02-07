@@ -298,6 +298,33 @@ def _find_workspace_root() -> str:
         current = parent
 
 
+def _list_packages() -> List[str]:
+    """List all colcon package names in the workspace src directory."""
+    import xml.etree.ElementTree as ET
+
+    try:
+        workspace_root = _find_workspace_root()
+    except ParseError:
+        return []  # Silent failure for completion
+
+    src_dir = os.path.join(workspace_root, "src")
+    if not os.path.isdir(src_dir):
+        return []
+
+    packages = []
+    for root, _dirs, files in os.walk(src_dir):
+        if "package.xml" in files:
+            try:
+                tree = ET.parse(os.path.join(root, "package.xml"))
+                name_elem = tree.find("name")
+                if name_elem is not None and name_elem.text:
+                    packages.append(name_elem.text.strip())
+            except ET.ParseError:
+                continue
+
+    return sorted(set(packages))
+
+
 def _parse_verbs(cmds: str) -> List[Tuple[str, Optional[str]]]:
     """Parse a string like 'boto' into [(verb, spec), ...]."""
     result: List[Tuple[str, Optional[str]]] = []
@@ -483,6 +510,33 @@ def _build_rosdep_cmd(spec: str, pkg: Optional[str]) -> List[str]:
     return _build_cmd("rosdep", "", spec, pkg)
 
 
+def _get_bash_completion() -> str:
+    """Return bash completion script for cr."""
+    return """
+# Colcon-runner bash completion
+# Added by: cr --install-shell-integration
+_cr_completions() {
+    local cur cword
+    if type _init_completion &>/dev/null; then
+        _init_completion || return
+    else
+        COMPREPLY=()
+        cur="${COMP_WORDS[COMP_CWORD]}"
+        cword=$COMP_CWORD
+    fi
+
+    # Complete package names at second argument position
+    if [[ $cword -eq 2 ]]; then
+        local packages
+        packages=$(command cr --list-packages 2>/dev/null)
+        COMPREPLY=( $(compgen -W "$packages" -- "$cur") )
+    fi
+}
+
+complete -F _cr_completions cr
+"""
+
+
 def _get_shell_integration() -> str:
     """Return shell integration code for auto-sourcing workspace."""
     return """
@@ -507,7 +561,7 @@ cr() {
 
 
 def _install_shell_integration() -> None:
-    """Install shell integration to ~/.bashrc, idempotently."""
+    """Install shell integration and completion to ~/.bashrc, idempotently."""
     bashrc_path = os.path.expanduser("~/.bashrc")
 
     # Check if bashrc exists
@@ -520,19 +574,27 @@ def _install_shell_integration() -> None:
     with open(bashrc_path, "r", encoding="utf-8", errors="replace") as f:
         bashrc_content = f.read()
 
-    # Check if integration is already installed
-    marker = "# Colcon-runner shell integration for auto-sourcing"
-    if marker in bashrc_content:
+    additions = []
+
+    # Check if shell function is already installed
+    function_marker = "# Colcon-runner shell integration for auto-sourcing"
+    if function_marker not in bashrc_content:
+        additions.append(_get_shell_integration())
+
+    # Check if completion is already installed
+    completion_marker = "# Colcon-runner bash completion"
+    if completion_marker not in bashrc_content:
+        additions.append(_get_bash_completion())
+
+    if not additions:
         print("Shell integration is already installed in ~/.bashrc")
         print("To update, remove the existing cr() function and run this command again.")
         return
 
-    # Get the shell integration code
-    integration_code = _get_shell_integration()
-
     # Append to bashrc
     with open(bashrc_path, "a", encoding="utf-8") as f:
-        f.write("\n" + integration_code + "\n")
+        for addition in additions:
+            f.write("\n" + addition + "\n")
 
     print("Shell integration installed to ~/.bashrc")
     print("To activate, run: source ~/.bashrc")
@@ -575,9 +637,17 @@ def main(argv=None) -> None:
         except KeyboardInterrupt:
             print("\nInterrupted by user", file=sys.stderr)
             sys.exit(130)
+
         except Exception as e:
             traceback.print_exc(file=sys.stderr)
             error(f"unexpected error: {e}")
+
+    # --list-packages: output package names (one per line) for shell completion
+    # This is a hidden flag used by completion scripts, not documented in help
+    if argv[0] == "--list-packages":
+        for pkg in _list_packages():
+            print(pkg)
+        sys.exit(0)
 
     try:
         cmds: str = argv[0]
