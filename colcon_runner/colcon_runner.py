@@ -303,8 +303,15 @@ def _find_workspace_root() -> str:
         current = parent
 
 
+_SKIP_DIRS = {"build", "install", "log", "test_result", ".git", "__pycache__"}
+
+
 def _list_packages() -> List[str]:
-    """List all colcon package names in the workspace src directory."""
+    """List all colcon package names reachable from the workspace root.
+
+    Searches recursively for ``package.xml`` files, skipping common
+    colcon output directories (build, install, log, test_result).
+    """
     import xml.etree.ElementTree as ET
 
     try:
@@ -312,16 +319,13 @@ def _list_packages() -> List[str]:
     except ParseError:
         return []  # Silent failure for completion
 
-    src_dir = os.path.join(workspace_root, "src")
-    if not os.path.isdir(src_dir):
-        # workspace_root may already point at the src directory
-        if os.path.basename(workspace_root) == "src" and os.path.isdir(workspace_root):
-            src_dir = workspace_root
-        else:
-            return []
+    if not os.path.isdir(workspace_root):
+        return []
 
     packages = []
-    for root, _dirs, files in os.walk(src_dir):
+    for root, dirs, files in os.walk(workspace_root):
+        # Prune colcon output and other non-source directories
+        dirs[:] = [d for d in dirs if d not in _SKIP_DIRS]
         if "package.xml" in files:
             try:
                 tree = ET.parse(os.path.join(root, "package.xml"))
