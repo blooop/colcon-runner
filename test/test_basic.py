@@ -774,6 +774,10 @@ class ShellIntegrationTests(unittest.TestCase):
         self.assertIn('source "$HOME/.bashrc"', integration)
         self.assertIn("return $cr_exit_code", integration)
 
+        # Check it skips re-source for flag arguments (--version, --help, etc.)
+        self.assertIn("--*", integration)
+        self.assertIn("-*", integration)
+
         # Check it has the marker comment
         self.assertIn("# Colcon-runner shell integration for auto-sourcing", integration)
         self.assertIn("# Added by: cr --install-shell-integration", integration)
@@ -1044,7 +1048,7 @@ class CompletionTests(unittest.TestCase):
         self.assertIn("complete -F _cr_completions cr", completion)
 
         # Check it completes at position 2
-        self.assertIn("cword -eq 2", completion)
+        self.assertIn("COMP_CWORD -eq 2", completion)
 
     def test_install_adds_completion(self):
         """Test --install-shell-integration adds completion script to bashrc."""

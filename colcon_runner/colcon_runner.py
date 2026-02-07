@@ -516,17 +516,11 @@ def _get_bash_completion() -> str:
 # Colcon-runner bash completion
 # Added by: cr --install-shell-integration
 _cr_completions() {
-    local cur cword
-    if type _init_completion &>/dev/null; then
-        _init_completion || return
-    else
-        COMPREPLY=()
-        cur="${COMP_WORDS[COMP_CWORD]}"
-        cword=$COMP_CWORD
-    fi
+    COMPREPLY=()
+    local cur="${COMP_WORDS[COMP_CWORD]}"
 
-    # Complete package names at second argument position
-    if [[ $cword -eq 2 ]]; then
+    # Complete package names at second argument position (cr VERB PKG)
+    if [[ $COMP_CWORD -eq 2 ]]; then
         local packages
         packages=$(command cr --list-packages 2>/dev/null)
         COMPREPLY=( $(compgen -W "$packages" -- "$cur") )
@@ -548,8 +542,8 @@ cr() {
     command cr "$@"
     local cr_exit_code=$?
 
-    # Re-source bashrc after any successful command to pick up workspace changes
-    if [ $cr_exit_code -eq 0 ]; then
+    # Only re-source bashrc after successful workspace commands (not --flags)
+    if [ $cr_exit_code -eq 0 ] && [[ "${1:-}" != --* ]] && [[ "${1:-}" != -* ]]; then
         if [ -f "$HOME/.bashrc" ]; then
             source "$HOME/.bashrc"
         fi
