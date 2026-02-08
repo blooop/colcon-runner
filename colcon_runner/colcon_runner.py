@@ -555,8 +555,13 @@ cr() {{
     command cr "$@"
     local ret=$?
     if [ $ret -eq 0 ] && [[ "${{1:-}}" != -* ]]; then
-        if [ -f "$HOME/.bashrc" ]; then
-            source "$HOME/.bashrc"
+        local ws
+        if ws=$(command cr --workspace-root 2>/dev/null) && [ -n "$ws" ]; then
+            if [ -f "$ws/install/local_setup.bash" ]; then
+                source "$ws/install/local_setup.bash"
+            elif [ -f "$ws/install/setup.bash" ]; then
+                source "$ws/install/setup.bash"
+            fi
         fi
     fi
     return $ret

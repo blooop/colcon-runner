@@ -1093,7 +1093,11 @@ class InitBashTests(unittest.TestCase):
 
         self.assertIn("cr() {", script)
         self.assertIn("command cr", script)
-        self.assertIn('source "$HOME/.bashrc"', script)
+        self.assertIn("--workspace-root", script)
+        self.assertIn("install/local_setup.bash", script)
+        self.assertIn("install/setup.bash", script)
+        # Must not re-source full bashrc
+        self.assertNotIn('source "$HOME/.bashrc"', script)
 
     def test_init_bash_contains_version_comment(self):
         """Test that _get_init_bash output starts with a version comment."""
