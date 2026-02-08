@@ -1084,7 +1084,7 @@ class InitBashTests(unittest.TestCase):
         self.assertIn("COMP_CWORD -eq 1", script)
         self.assertIn("COMP_CWORD -eq 2", script)
         # Should skip completion when typing an option (--something)
-        self.assertIn('-*', script)
+        self.assertIn("-*", script)
 
     def test_init_bash_contains_cr_wrapper(self):
         """Test that _get_init_bash includes the cr() wrapper with targeted sourcing."""
@@ -1461,9 +1461,7 @@ class VerbFirstBackwardCompatTests(unittest.TestCase):
         """A package named 'b' should not shadow the 'b' verb."""
         # _list_packages returns a package named "b"
         self.list_patch.stop()
-        with mock.patch.object(
-            colcon_runner, "_list_packages", return_value=["b", "my_pkg"]
-        ):
+        with mock.patch.object(colcon_runner, "_list_packages", return_value=["b", "my_pkg"]):
             with mock.patch.object(colcon_runner, "subprocess") as m_sp:
                 m_sp.run.return_value.returncode = 0
                 buf = io.StringIO()
@@ -1488,9 +1486,7 @@ class PackageFirstListPackagesFailureTests(unittest.TestCase):
 
     def test_list_packages_exception_falls_back_to_verb_first(self):
         """When _list_packages raises, fall back to verb-first mode."""
-        with mock.patch.object(
-            colcon_runner, "_list_packages", side_effect=OSError("boom")
-        ):
+        with mock.patch.object(colcon_runner, "_list_packages", side_effect=OSError("boom")):
             with mock.patch.object(colcon_runner, "subprocess") as m_sp:
                 m_sp.run.return_value.returncode = 0
                 buf = io.StringIO()

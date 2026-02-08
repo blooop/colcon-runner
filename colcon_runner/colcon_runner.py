@@ -809,12 +809,7 @@ def main(argv=None) -> None:
             pkg: Optional[str] = get_pkg(override_pkg) if need_pkg else None
 
             # Warn if package name provided but will be ignored (verb-first mode only)
-            if (
-                not pkg_first
-                and spec == "a"
-                and override_pkg
-                and not override_pkg.startswith("-")
-            ):
+            if not pkg_first and spec == "a" and override_pkg and not override_pkg.startswith("-"):
                 logger.warning(
                     f"Package name '{override_pkg}' provided but specifier defaulted to 'all'.\n"
                     f"         Did you mean '{verb}o {override_pkg}' (only) or '{verb}u {override_pkg}' (up-to)?"
