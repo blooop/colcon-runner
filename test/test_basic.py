@@ -787,7 +787,7 @@ class ShellIntegrationTests(unittest.TestCase):
                     self.assertIn("cr() {", content)
                     self.assertIn("_cr_completions()", content)
                     self.assertIn("complete -F _cr_completions cr", content)
-                    self.assertIn("--workspace-root", content)
+                    self.assertIn("--install-base", content)
 
     def test_install_shell_integration_idempotent(self):
         """Test that installing shell integration twice is idempotent."""
@@ -900,7 +900,7 @@ class ShellIntegrationTests(unittest.TestCase):
                     # Should have new version, not old
                     self.assertNotIn("v0.9.0", content)
                     self.assertIn("# Colcon-runner shell integration v", content)
-                    self.assertIn("--workspace-root", content)
+                    self.assertIn("--install-base", content)
                     self.assertEqual(content.count("# Colcon-runner shell integration v"), 1)
 
 
@@ -1094,8 +1094,8 @@ class InitBashTests(unittest.TestCase):
         self.assertIn("cr() {", script)
         self.assertIn("command cr", script)
         self.assertIn("--install-base", script)
-        self.assertIn("install/local_setup.bash", script)
-        self.assertIn("install/setup.bash", script)
+        self.assertIn("local_setup.bash", script)
+        self.assertIn("setup.bash", script)
         # Must not re-source full bashrc
         self.assertNotIn('source "$HOME/.bashrc"', script)
 
