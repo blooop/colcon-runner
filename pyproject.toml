@@ -92,7 +92,7 @@ prek-update = "prek autoupdate"
 format = "ruff format ."
 check-clean-workspace = "git diff --exit-code"
 ruff-lint = "ruff check . --fix"
-pylint = "pylint --version && echo 'running pylint...' && pylint --jobs=1 $(git ls-files '*.py')"
+pylint = "pylint --version && echo 'running pylint...' && pylint $(git ls-files '*.py')"
 ty = "ty check --respect-ignore-files ."
 lint = { depends-on = ["ruff-lint", "ty", "pylint"] }
 style = { depends-on = ["format", "lint"] }
