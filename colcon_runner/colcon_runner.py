@@ -6,7 +6,8 @@ NAME
     cr - Colcon Runner: concise CLI for common colcon tasks.
 
 SYNOPSIS
-    cr VERB [PKG] [OPTIONS]
+    cr [PKG] [VERB] [OPTIONS]
+    cr [VERB] [PKG] [OPTIONS]
     cr --help | -h
     cr --version | -v
     cr --install-shell-integration
@@ -15,98 +16,101 @@ DESCRIPTION
     A minimal wrapper around colcon providing short, mnemonic commands
     for build, test, clean, and package selection operations.
 
+    Both argument orders are supported.  If the first positional
+    argument cannot be parsed as a verb string and matches a known
+    package in the workspace, it is used as the target package (package-
+    first mode).  Otherwise it is treated as a verb string (verb-first
+    mode).
+
 STATE
     s       set a default package for subsequent commands.
 
 VERBS
     b       build packages.
-    t       Test packages.
+    t       test packages.
     c       clean packages.
     i       install dependencies using rosdep.
 
 SPECIFIER
     o       only (--packages-select)
     u       upto (--packages-up-to)
-    a       all (default if omitted)
+    a       all
 
-If no specifier is provided after a verb, it defaults to "a" (all). You can chain as many verb-specifier pairs as you want. You can set a default package to use for all subsequent commands, or you can specify a package in the command itself.
+    If a package is given, the default specifier is "u" (up-to).
+    If no package is given, the default specifier is "a" (all).
 
 USAGE EXAMPLES
 
-  Basic Commands:
-    cr b
-        Build all packages. (shorthand, specifier defaults to "a")
+  No arguments:
+    cr
+        Build all packages. (default action when no arguments provided)
 
-    cr ba
-        Build all packages. (explicit)
+  Package only (tab-completable):
+    cr pkg_1
+        Build up to 'pkg_1' and its dependencies. (default action)
 
-    cr bo pkg_1
+  Package with verb:
+    cr pkg_1 b
+        Build up to 'pkg_1' and its dependencies.
+
+    cr pkg_1 bo
         Build only 'pkg_1'.
 
-    cr bu pkg_1
-        Build upto 'pkg_1' and its dependencies.
+    cr pkg_1 bu
+        Build up to 'pkg_1' and its dependencies. (explicit)
 
-    cr t
-        Test all packages. (shorthand)
+    cr pkg_1 t
+        Test up to 'pkg_1' and its dependencies.
 
-    cr ta
-        Test all packages. (explicit)
-
-    cr to pkg_1
+    cr pkg_1 to
         Test only 'pkg_1'.
 
-    cr tu pkg_1
-        Test upto 'pkg_1' and its dependencies.
+    cr pkg_1 c
+        Clean up to 'pkg_1'.
 
-    cr c
-        Clean workspace. (shorthand)
-
-    cr ca
-        Clean workspace (build/, install/, log/, and test_result/ directories)
-
-    cr co pkg_1
+    cr pkg_1 co
         Clean only 'pkg_1'.
 
-    cr cu pkg_1
-        Clean upto 'pkg_1'.
+    cr pkg_1 ca
+        Clean all. (explicit "a" overrides package default)
 
-    cr i
-        Install all dependencies using rosdep. (shorthand)
-
-    cr ia
-        Install all dependencies using rosdep. (explicit)
-
-    cr io pkg_1
-        Install dependencies only for 'pkg_1'.
-
-    cr iu pkg_1
+    cr pkg_1 i
         Install dependencies for 'pkg_1' and its dependencies.
 
-  Compound Commands:
-    cr s pkg1
+    cr pkg_1 io
+        Install dependencies only for 'pkg_1'.
+
+    cr pkg_1 s
         Set 'pkg_1' as the default package for subsequent commands.
 
-    cr bt
-        Build all and test all. (shorthand)
+  Verb only (operates on all packages):
+    cr b
+        Build all packages.
+
+    cr t
+        Test all packages.
+
+    cr c
+        Clean workspace (build/, install/, log/, and test_result/).
+
+    cr i
+        Install all dependencies using rosdep.
+
+  Compound commands:
+    cr pkg_1 bt
+        Build up to 'pkg_1', then test up to 'pkg_1'.
+
+    cr pkg_1 boto
+        Build only 'pkg_1', then test only 'pkg_1'.
+
+    cr pkg_1 cbt
+        Clean up to 'pkg_1', build up to 'pkg_1', test up to 'pkg_1'.
 
     cr cbt
-        Clean all, build all, and test all. (shorthand)
+        Clean all, build all, test all.
 
-    cr ib
-        Install all dependencies and build all.
-
-    cr iobo
-        Install dependencies for 'pkg1' only, then build only 'pkg1'.
-
-    cr cabu
-        Clean all and build up to 'pkg1'.
-
-    cr boto
-        build only 'pkg1' package, then test only 'pkg1'.
-
-    cr cabuto
-        Clean all, build up to 'pkg1', and test only 'pkg1'.
-
+    cr pkg_1 cabuto
+        Clean all, build up to 'pkg_1', test only 'pkg_1'.
 
 OPTIONS
     --help, -h
@@ -116,13 +120,24 @@ OPTIONS
         Show the version number and exit.
 
     --install-shell-integration
-        Install bash completion and shell integration to ~/.bashrc.
+        Install bash shell integration to ~/.bashrc for auto-sourcing
+        after successful cr commands and tab completion of package names.
 
 NOTES
-    - The 's' verb sets a default package name stored in a configuration file.
-    - The 'i' verb runs rosdep install and supports the same specifiers as other verbs.
-    - Subsequent commands that require a package argument will use the default if none is provided.
-    - Compound verbs can be chained together for streamlined operations.
+    - If the first positional argument cannot be parsed as a verb
+      string and matches a known workspace package, it is used as the
+      target package with a default specifier of "u" (up-to).
+      Otherwise it is parsed as a verb string with a default specifier
+      of "a" (all).  Verb-first parsing takes priority, so packages
+      whose names happen to look like valid verb strings (e.g. "b")
+      will not shadow the verb.
+    - The 's' verb sets a default package name stored in a config file.
+    - The 'i' verb runs rosdep install and supports the same specifiers.
+    - Subsequent commands that require a package argument will use the
+      default if none is provided.
+    - Compound verbs can be chained for streamlined operations.
+    - Tab completion for package names is available when shell
+      integration is installed.
 
 SEE ALSO
     colcon(1), colcon-clean(1)
@@ -332,8 +347,14 @@ def _list_packages() -> List[str]:
     return sorted(set(packages))
 
 
-def _parse_verbs(cmds: str) -> List[Tuple[str, Optional[str]]]:
-    """Parse a string like 'boto' into [(verb, spec), ...]."""
+def _parse_verbs(cmds: str, default_spec: str = "a") -> List[Tuple[str, Optional[str]]]:
+    """Parse a string like 'boto' into [(verb, spec), ...].
+
+    Args:
+        cmds: The verb string to parse.
+        default_spec: The specifier to use when none is provided after a verb.
+            Defaults to "a" (all). Use "u" for package-first mode.
+    """
     result: List[Tuple[str, Optional[str]]] = []
     i = 0
     while i < len(cmds):
@@ -350,9 +371,9 @@ def _parse_verbs(cmds: str) -> List[Tuple[str, Optional[str]]]:
             i += 1
             continue
 
-        # If no specifier provided or invalid specifier, default to "a"
+        # If no specifier provided or invalid specifier, use default_spec
         if i + 1 >= len(cmds) or cmds[i + 1] not in ("o", "u", "a"):
-            result.append((verb, "a"))
+            result.append((verb, default_spec))
             i += 1
         else:
             result.append((verb, cmds[i + 1]))
@@ -548,8 +569,13 @@ _cr_completions() {{
     COMPREPLY=()
     local cur="${{COMP_WORDS[COMP_CWORD]}}"
 
-    # Complete package names at second argument position (cr VERB PKG)
-    if [[ $COMP_CWORD -eq 2 ]]; then
+    # Do not complete packages when typing an option
+    if [[ "$cur" == -* ]]; then
+        return 0
+    fi
+
+    # Complete package names at first or second argument position (cr PKG or cr VERB PKG)
+    if [[ $COMP_CWORD -eq 1 ]] || [[ $COMP_CWORD -eq 2 ]]; then
         local packages
         packages=$(command cr --list-packages 2>/dev/null)
         COMPREPLY=( $(compgen -W "$packages" -- "$cur") )
@@ -703,19 +729,53 @@ def main(argv=None) -> None:
         sys.exit(0)
 
     try:
-        cmds: str = argv[0]
-        rest: List[str] = argv[1:]
+        # Detect package-first vs verb-first argument order.
+        # Prefer verb-first when argv[0] can be parsed as verbs; only fall
+        # back to package-first when verb parsing fails and argv[0] is a
+        # known package.  This avoids calling _list_packages() on every
+        # invocation and preserves backward compatibility when a package
+        # name happens to overlap with a valid verb string (e.g. "b").
+        verb_parse_ok = False
+        try:
+            _parse_verbs(argv[0])
+            verb_parse_ok = True
+        except ParseError:
+            pass
 
-        # extract override pkg (first non-dash arg)
-        override_pkg: Optional[str] = None
-        extra_opts: List[str] = []
-        for arg in rest:
-            if not arg.startswith("-") and override_pkg is None:
-                override_pkg = arg
+        pkg_first = False
+        if not verb_parse_ok:
+            try:
+                known_packages = set(_list_packages())
+            except (ParseError, OSError):
+                known_packages = set()
+            pkg_first = argv[0] in known_packages
+
+        if pkg_first:
+            # Package-first mode: cr PKG [VERB] [OPTIONS]
+            override_pkg: Optional[str] = argv[0]
+            remaining = argv[1:]
+            if remaining and not remaining[0].startswith("-"):
+                cmds: str = remaining[0]
+                extra_opts: List[str] = list(remaining[1:])
             else:
-                extra_opts.append(arg)
+                cmds = "bu"  # default: build up-to
+                extra_opts = list(remaining)
+            parsed_verbs = _parse_verbs(cmds, default_spec="u")
+        else:
+            # Verb-first mode (existing): cr VERB [PKG] [OPTIONS]
+            cmds = argv[0]
+            rest: List[str] = argv[1:]
 
-        parsed_verbs = _parse_verbs(cmds)
+            # extract override pkg (first non-dash arg)
+            override_pkg = None
+            extra_opts = []
+            for arg in rest:
+                if not arg.startswith("-") and override_pkg is None:
+                    override_pkg = arg
+                else:
+                    extra_opts.append(arg)
+
+            parsed_verbs = _parse_verbs(cmds)
 
         # Track if rosdep update has been run
         rosdep_updated = False
@@ -746,8 +806,13 @@ def main(argv=None) -> None:
             need_pkg: bool = spec in ("o", "u")
             pkg: Optional[str] = get_pkg(override_pkg) if need_pkg else None
 
-            # Warn if package name provided but will be ignored
-            if spec == "a" and override_pkg and not override_pkg.startswith("-"):
+            # Warn if package name provided but will be ignored (verb-first mode only)
+            if (
+                not pkg_first
+                and spec == "a"
+                and override_pkg
+                and not override_pkg.startswith("-")
+            ):
                 logger.warning(
                     f"Package name '{override_pkg}' provided but specifier defaulted to 'all'.\n"
                     f"         Did you mean '{verb}o {override_pkg}' (only) or '{verb}u {override_pkg}' (up-to)?"

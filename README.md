@@ -30,7 +30,7 @@ cr --install-shell-integration
 source ~/.bashrc  # Or start a new terminal
 ```
 
-This will automatically re-source `~/.bashrc` after any successful `cr` command, ensuring your environment always reflects the latest workspace state while preserving your ROS installation and any underlay workspaces.
+This will automatically re-source your workspace after any successful `cr` command, ensuring your environment always reflects the latest workspace state while preserving your ROS installation and any underlay workspaces.
 
 The installation is idempotent - running it multiple times is safe and won't create duplicates.
 
@@ -41,7 +41,8 @@ NAME
     cr - Colcon Runner: concise CLI for common colcon tasks.
 
 SYNOPSIS
-    cr VERB [PKG] [OPTIONS]
+    cr [PKG] [VERB] [OPTIONS]
+    cr [VERB] [PKG] [OPTIONS]
     cr --help | -h
     cr --version | -v
     cr --install-shell-integration
@@ -50,101 +51,101 @@ DESCRIPTION
     A minimal wrapper around colcon providing short, mnemonic commands
     for build, test, clean, and package selection operations.
 
+    Both argument orders are supported.  If the first positional
+    argument cannot be parsed as a verb string and matches a known
+    package in the workspace, it is used as the target package (package-
+    first mode).  Otherwise it is treated as a verb string (verb-first
+    mode).
+
 STATE
     s       set a default package for subsequent commands.
 
 VERBS
     b       build packages.
-    t       Test packages.
+    t       test packages.
     c       clean packages.
     i       install dependencies using rosdep.
 
 SPECIFIER
     o       only (--packages-select)
     u       upto (--packages-up-to)
-    a       all (default if omitted)
+    a       all
 
-If no specifier is provided after a verb, it defaults to "a" (all). You can chain as many verb-specifier pairs as you want. You can set a default package to use for all subsequent commands, or you can specify a package in the command itself.
+    If a package is given, the default specifier is "u" (up-to).
+    If no package is given, the default specifier is "a" (all).
 
 USAGE EXAMPLES
 
-  Basic Commands:
+  No arguments:
     cr
         Build all packages. (default action when no arguments provided)
 
-    cr b
-        Build all packages. (shorthand, specifier defaults to "a")
+  Package only (tab-completable):
+    cr pkg_1
+        Build up to 'pkg_1' and its dependencies. (default action)
 
-    cr ba
-        Build all packages. (explicit)
+  Package with verb:
+    cr pkg_1 b
+        Build up to 'pkg_1' and its dependencies.
 
-    cr bo pkg_1
+    cr pkg_1 bo
         Build only 'pkg_1'.
 
-    cr bu pkg_1
-        Build upto 'pkg_1' and its dependencies.
+    cr pkg_1 bu
+        Build up to 'pkg_1' and its dependencies. (explicit)
 
-    cr t
-        Test all packages. (shorthand)
+    cr pkg_1 t
+        Test up to 'pkg_1' and its dependencies.
 
-    cr ta
-        Test all packages. (explicit)
-
-    cr to pkg_1
+    cr pkg_1 to
         Test only 'pkg_1'.
 
-    cr tu pkg_1
-        Test upto 'pkg_1' and its dependencies.
+    cr pkg_1 c
+        Clean up to 'pkg_1'.
 
-    cr c
-        Clean workspace. (shorthand)
-
-    cr ca
-        Clean workspace (build/, install/, log/, and test_result/ directories)
-
-    cr co pkg_1
+    cr pkg_1 co
         Clean only 'pkg_1'.
 
-    cr cu pkg_1
-        Clean upto 'pkg_1'.
+    cr pkg_1 ca
+        Clean all. (explicit "a" overrides package default)
 
-    cr i
-        Install all dependencies using rosdep. (shorthand)
-
-    cr ia
-        Install all dependencies using rosdep. (explicit)
-
-    cr io pkg_1
-        Install dependencies only for 'pkg_1'.
-
-    cr iu pkg_1
+    cr pkg_1 i
         Install dependencies for 'pkg_1' and its dependencies.
 
-  Compound Commands:
-    cr s pkg1
+    cr pkg_1 io
+        Install dependencies only for 'pkg_1'.
+
+    cr pkg_1 s
         Set 'pkg_1' as the default package for subsequent commands.
 
-    cr bt
-        Build all and test all. (shorthand)
+  Verb only (operates on all packages):
+    cr b
+        Build all packages.
+
+    cr t
+        Test all packages.
+
+    cr c
+        Clean workspace (build/, install/, log/, and test_result/).
+
+    cr i
+        Install all dependencies using rosdep.
+
+  Compound commands:
+    cr pkg_1 bt
+        Build up to 'pkg_1', then test up to 'pkg_1'.
+
+    cr pkg_1 boto
+        Build only 'pkg_1', then test only 'pkg_1'.
+
+    cr pkg_1 cbt
+        Clean up to 'pkg_1', build up to 'pkg_1', test up to 'pkg_1'.
 
     cr cbt
-        Clean all, build all, and test all. (shorthand)
+        Clean all, build all, test all.
 
-    cr ib
-        Install all dependencies and build all.
-
-    cr iobo
-        Install dependencies for 'pkg1' only, then build only 'pkg1'.
-
-    cr cabu
-        Clean all and build up to 'pkg1'.
-
-    cr boto
-        build only 'pkg1' package, then test only 'pkg1'.
-
-    cr cabuto
-        Clean all, build up to 'pkg1', and test only 'pkg1'.
-
+    cr pkg_1 cabuto
+        Clean all, build up to 'pkg_1', test only 'pkg_1'.
 
 OPTIONS
     --help, -h
@@ -155,13 +156,23 @@ OPTIONS
 
     --install-shell-integration
         Install bash shell integration to ~/.bashrc for auto-sourcing
-        after successful cr commands.
+        after successful cr commands and tab completion of package names.
 
 NOTES
-    - The 's' verb sets a default package name stored in a configuration file.
-    - The 'i' verb runs rosdep install and supports the same specifiers as other verbs.
-    - Subsequent commands that require a package argument will use the default if none is provided.
-    - Compound verbs can be chained together for streamlined operations.
+    - If the first positional argument cannot be parsed as a verb
+      string and matches a known workspace package, it is used as the
+      target package with a default specifier of "u" (up-to).
+      Otherwise it is parsed as a verb string with a default specifier
+      of "a" (all).  Verb-first parsing takes priority, so packages
+      whose names happen to look like valid verb strings (e.g. "b")
+      will not shadow the verb.
+    - The 's' verb sets a default package name stored in a config file.
+    - The 'i' verb runs rosdep install and supports the same specifiers.
+    - Subsequent commands that require a package argument will use the
+      default if none is provided.
+    - Compound verbs can be chained for streamlined operations.
+    - Tab completion for package names is available when shell
+      integration is installed.
 
 SEE ALSO
     colcon(1), colcon-clean(1)

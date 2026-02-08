@@ -1081,7 +1081,10 @@ class InitBashTests(unittest.TestCase):
         self.assertIn("_cr_completions()", script)
         self.assertIn("--list-packages", script)
         self.assertIn("complete -F _cr_completions cr", script)
+        self.assertIn("COMP_CWORD -eq 1", script)
         self.assertIn("COMP_CWORD -eq 2", script)
+        # Should skip completion when typing an option (--something)
+        self.assertIn('-*', script)
 
     def test_init_bash_contains_cr_wrapper(self):
         """Test that _get_init_bash includes the cr() wrapper with targeted sourcing."""
@@ -1197,6 +1200,303 @@ class RemoveShellIntegrationTests(unittest.TestCase):
         self.assertTrue(modified)
         self.assertIn("alias ls='ls --color'", cleaned)
         self.assertIn("alias grep='grep --color'", cleaned)
+
+
+class ParseVerbsDefaultSpecTests(unittest.TestCase):
+    """Test _parse_verbs with non-default default_spec parameter."""
+
+    # pylint: disable=protected-access
+
+    def test_default_spec_u(self):
+        # When default_spec="u", unspecified verbs default to "u"
+        self.assertEqual(colcon_runner._parse_verbs("b", default_spec="u"), [("b", "u")])
+        self.assertEqual(colcon_runner._parse_verbs("t", default_spec="u"), [("t", "u")])
+        self.assertEqual(colcon_runner._parse_verbs("c", default_spec="u"), [("c", "u")])
+        self.assertEqual(colcon_runner._parse_verbs("i", default_spec="u"), [("i", "u")])
+
+    def test_default_spec_u_compound(self):
+        self.assertEqual(
+            colcon_runner._parse_verbs("bt", default_spec="u"), [("b", "u"), ("t", "u")]
+        )
+        self.assertEqual(
+            colcon_runner._parse_verbs("cbt", default_spec="u"),
+            [("c", "u"), ("b", "u"), ("t", "u")],
+        )
+
+    def test_explicit_spec_overrides_default(self):
+        # Explicit specifiers override default_spec
+        self.assertEqual(colcon_runner._parse_verbs("bo", default_spec="u"), [("b", "o")])
+        self.assertEqual(colcon_runner._parse_verbs("ba", default_spec="u"), [("b", "a")])
+        self.assertEqual(colcon_runner._parse_verbs("bu", default_spec="u"), [("b", "u")])
+
+    def test_mixed_explicit_and_default(self):
+        # "cabuto" with default_spec="u": ca=explicit, bu=explicit, to=explicit
+        self.assertEqual(
+            colcon_runner._parse_verbs("cabuto", default_spec="u"),
+            [("c", "a"), ("b", "u"), ("t", "o")],
+        )
+        # "boto" with default_spec="u": bo=explicit, to=explicit
+        self.assertEqual(
+            colcon_runner._parse_verbs("boto", default_spec="u"), [("b", "o"), ("t", "o")]
+        )
+
+    def test_set_verb_unaffected_by_default_spec(self):
+        # 's' verb has no specifier regardless of default_spec
+        self.assertEqual(colcon_runner._parse_verbs("s", default_spec="u"), [("s", None)])
+
+
+class PackageFirstIntegrationTests(unittest.TestCase):
+    """Test package-first argument order: cr PKG [VERB]."""
+
+    def setUp(self):
+        # Mock workspace root detection
+        self.workspace_patch = mock.patch.object(
+            colcon_runner, "_find_workspace_root", return_value="/test/workspace"
+        )
+        self.workspace_patch.start()
+        self.addCleanup(self.workspace_patch.stop)
+
+        # Mock _list_packages to return known packages
+        self.list_patch = mock.patch.object(
+            colcon_runner, "_list_packages", return_value=["my_pkg", "other_pkg", "pkg-with-dash"]
+        )
+        self.list_patch.start()
+        self.addCleanup(self.list_patch.stop)
+
+    def test_pkg_only_defaults_to_build_upto(self):
+        """cr my_pkg -> build --packages-up-to my_pkg."""
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["my_pkg", "--dry-run"])
+            output = buf.getvalue()
+            self.assertIn("colcon build --packages-up-to my_pkg", output)
+
+    def test_pkg_with_bo(self):
+        """cr my_pkg bo -> build --packages-select my_pkg."""
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["my_pkg", "bo", "--dry-run"])
+            output = buf.getvalue()
+            self.assertIn("colcon build --packages-select my_pkg", output)
+
+    def test_pkg_with_bu(self):
+        """cr my_pkg bu -> build --packages-up-to my_pkg."""
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["my_pkg", "bu", "--dry-run"])
+            output = buf.getvalue()
+            self.assertIn("colcon build --packages-up-to my_pkg", output)
+
+    def test_pkg_with_bt_compound(self):
+        """cr my_pkg bt -> build upto + test upto."""
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["my_pkg", "bt", "--dry-run"])
+            output = buf.getvalue()
+            self.assertIn("colcon build --packages-up-to my_pkg", output)
+            self.assertIn("colcon test --packages-up-to my_pkg", output)
+
+    def test_pkg_with_boto_compound(self):
+        """cr my_pkg boto -> build only + test only."""
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["my_pkg", "boto", "--dry-run"])
+            output = buf.getvalue()
+            self.assertIn("colcon build --packages-select my_pkg", output)
+            self.assertIn("colcon test --packages-select my_pkg", output)
+
+    def test_pkg_with_cbt_compound(self):
+        """cr my_pkg cbt -> clean upto + build upto + test upto."""
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["my_pkg", "cbt", "--dry-run"])
+            output = buf.getvalue()
+            self.assertIn("colcon clean packages", output)
+            self.assertIn("--packages-up-to my_pkg", output)
+            self.assertIn("colcon build --packages-up-to my_pkg", output)
+            self.assertIn("colcon test --packages-up-to my_pkg", output)
+
+    def test_pkg_with_ca_overrides_default(self):
+        """cr my_pkg ca -> clean all (explicit 'a' overrides default 'u')."""
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["my_pkg", "ca", "--dry-run"])
+            output = buf.getvalue()
+            self.assertIn("colcon clean workspace", output)
+
+    def test_pkg_with_set_verb(self):
+        """cr my_pkg s -> set default package."""
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["my_pkg", "s"])
+            output = buf.getvalue()
+            self.assertIn("Default package set to 'my_pkg'", output)
+
+    def test_pkg_with_dash_in_name(self):
+        """cr pkg-with-dash -> build --packages-up-to pkg-with-dash."""
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["pkg-with-dash", "--dry-run"])
+            output = buf.getvalue()
+            self.assertIn("colcon build --packages-up-to pkg-with-dash", output)
+
+    def test_pkg_with_install_verb(self):
+        """cr my_pkg i -> rosdep install upto."""
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["my_pkg", "i", "--dry-run"])
+            output = buf.getvalue()
+            self.assertIn("rosdep install --from-paths /test/workspace/my_pkg", output)
+
+    def test_pkg_with_cabuto_compound(self):
+        """cr my_pkg cabuto -> clean all, build upto, test only."""
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["my_pkg", "cabuto", "--dry-run"])
+            output = buf.getvalue()
+            self.assertIn("colcon clean workspace", output)
+            self.assertIn("colcon build --packages-up-to my_pkg", output)
+            self.assertIn("colcon test --packages-select my_pkg", output)
+
+
+class VerbFirstBackwardCompatTests(unittest.TestCase):
+    """Test that existing verb-first commands still work unchanged."""
+
+    def setUp(self):
+        # Mock workspace root detection
+        self.workspace_patch = mock.patch.object(
+            colcon_runner, "_find_workspace_root", return_value="/test/workspace"
+        )
+        self.workspace_patch.start()
+        self.addCleanup(self.workspace_patch.stop)
+
+        # Mock _list_packages to return known packages (none matching verbs)
+        self.list_patch = mock.patch.object(
+            colcon_runner, "_list_packages", return_value=["my_pkg", "other_pkg"]
+        )
+        self.list_patch.start()
+        self.addCleanup(self.list_patch.stop)
+
+    def test_verb_first_build_all(self):
+        """cr b -> build all (verb-first mode)."""
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["b", "--dry-run"])
+            output = buf.getvalue()
+            self.assertIn("colcon build --dry-run", output)
+            # Should NOT contain --packages-up-to or --packages-select
+            self.assertNotIn("--packages-up-to", output)
+            self.assertNotIn("--packages-select", output)
+
+    def test_verb_first_bo_with_pkg(self):
+        """cr bo my_pkg -> build only my_pkg (verb-first mode)."""
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["bo", "my_pkg", "--dry-run"])
+            output = buf.getvalue()
+            self.assertIn("colcon build --packages-select my_pkg", output)
+
+    def test_verb_first_cbt(self):
+        """cr cbt -> clean all, build all, test all (verb-first mode)."""
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                colcon_runner.main(["cbt", "--dry-run"])
+            output = buf.getvalue()
+            self.assertIn("colcon clean workspace", output)
+            self.assertIn("colcon build", output)
+            self.assertIn("colcon test", output)
+
+    def test_unknown_first_arg_errors(self):
+        """cr xyz -> error (not a package, not a valid verb)."""
+        buf_err = io.StringIO()
+        with contextlib.redirect_stderr(buf_err):
+            with self.assertRaises(SystemExit) as cm:
+                colcon_runner.main(["xyz"])
+        self.assertEqual(cm.exception.code, 1)
+        self.assertIn("unknown command letter 'x'", buf_err.getvalue())
+
+    def test_no_warning_in_package_first_mode(self):
+        """Package-first mode should not trigger the 'defaulted to all' warning."""
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+            # my_pkg ca -> clean all; no warning since it's package-first mode
+            with mock.patch.object(colcon_runner.logger, "warning") as mock_warn:
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    colcon_runner.main(["my_pkg", "ca", "--dry-run"])
+                mock_warn.assert_not_called()
+            output = buf.getvalue()
+            self.assertIn("colcon clean workspace", output)
+
+    def test_verb_like_package_name_stays_verb_first(self):
+        """A package named 'b' should not shadow the 'b' verb."""
+        # _list_packages returns a package named "b"
+        self.list_patch.stop()
+        with mock.patch.object(
+            colcon_runner, "_list_packages", return_value=["b", "my_pkg"]
+        ):
+            with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+                m_sp.run.return_value.returncode = 0
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    colcon_runner.main(["b", "--dry-run"])
+                output = buf.getvalue()
+                # "b" should be parsed as verb (build all), not as package
+                self.assertIn("colcon build --dry-run", output)
+                self.assertNotIn("--packages-up-to", output)
+        self.list_patch.start()
+
+
+class PackageFirstListPackagesFailureTests(unittest.TestCase):
+    """Test that package-first detection gracefully handles _list_packages failures."""
+
+    def setUp(self):
+        self.workspace_patch = mock.patch.object(
+            colcon_runner, "_find_workspace_root", return_value="/test/workspace"
+        )
+        self.workspace_patch.start()
+        self.addCleanup(self.workspace_patch.stop)
+
+    def test_list_packages_exception_falls_back_to_verb_first(self):
+        """When _list_packages raises, fall back to verb-first mode."""
+        with mock.patch.object(
+            colcon_runner, "_list_packages", side_effect=OSError("boom")
+        ):
+            with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+                m_sp.run.return_value.returncode = 0
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    colcon_runner.main(["b", "--dry-run"])
+                output = buf.getvalue()
+                self.assertIn("colcon build --dry-run", output)
 
 
 if __name__ == "__main__":  # pragma: no cover — run the tests
