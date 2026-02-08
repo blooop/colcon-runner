@@ -312,6 +312,61 @@ def _find_workspace_root() -> str:
         current = parent
 
 
+def _get_defaults_path() -> str:
+    """Return the global defaults path that colcon would load."""
+
+    if "COLCON_DEFAULTS_FILE" in os.environ:
+        return os.environ["COLCON_DEFAULTS_FILE"]
+
+    colcon_home = os.environ.get("COLCON_HOME")
+    if colcon_home:
+        return os.path.join(colcon_home, "defaults.yaml")
+
+    return os.path.expanduser("~/.colcon/defaults.yaml")
+
+
+def _load_yaml_dict(path: str) -> Optional[dict]:
+    """Best-effort YAML loader that only returns dict payloads."""
+
+    if not path or not os.path.isfile(path):
+        return None
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.warning(f"Failed to parse defaults file '{path}': {exc}")
+        return None
+
+    if isinstance(data, dict):
+        return data
+
+    return None
+
+
+def _get_install_base() -> str:
+    """Return the install-base for the current workspace."""
+
+    workspace_root = _find_workspace_root()
+    defaults_sources = [
+        os.path.join(workspace_root, "colcon_defaults.yaml"),
+        _get_defaults_path(),
+    ]
+
+    for defaults_path in defaults_sources:
+        data = _load_yaml_dict(defaults_path)
+        if not data:
+            continue
+
+        install_base = data.get("build", {}).get("install-base")
+        if install_base:
+            if not os.path.isabs(install_base):
+                install_base = os.path.join(workspace_root, install_base)
+            return os.path.abspath(install_base)
+
+    return os.path.abspath(os.path.join(workspace_root, "install"))
+
+
 _SKIP_DIRS = {"build", "install", "log", "test_result", ".git", "__pycache__"}
 
 
@@ -555,12 +610,12 @@ cr() {{
     command cr "$@"
     local ret=$?
     if [ $ret -eq 0 ] && [[ "${{1:-}}" != -* ]]; then
-        local ws
-        if ws=$(command cr --workspace-root 2>/dev/null) && [ -n "$ws" ]; then
-            if [ -f "$ws/install/local_setup.bash" ]; then
-                source "$ws/install/local_setup.bash"
-            elif [ -f "$ws/install/setup.bash" ]; then
-                source "$ws/install/setup.bash"
+        local install_base
+        if install_base=$(command cr --install-base 2>/dev/null) && [ -n "$install_base" ]; then
+            if [ -f "$install_base/local_setup.bash" ]; then
+                source "$install_base/local_setup.bash"
+            elif [ -f "$install_base/setup.bash" ]; then
+                source "$install_base/setup.bash"
             fi
         fi
     fi
@@ -729,6 +784,15 @@ def main(argv=None) -> None:
         for pkg in _list_packages():
             print(pkg)
         sys.exit(0)
+
+    # --install-base: output resolved install-base for shell integration
+    # Hidden flag used by the shell wrapper, not documented in help
+    if argv[0] == "--install-base":
+        try:
+            print(_get_install_base())
+            sys.exit(0)
+        except ParseError:
+            sys.exit(1)
 
     try:
         # Detect package-first vs verb-first argument order.

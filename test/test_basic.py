@@ -1093,7 +1093,7 @@ class InitBashTests(unittest.TestCase):
 
         self.assertIn("cr() {", script)
         self.assertIn("command cr", script)
-        self.assertIn("--workspace-root", script)
+        self.assertIn("--install-base", script)
         self.assertIn("install/local_setup.bash", script)
         self.assertIn("install/setup.bash", script)
         # Must not re-source full bashrc
