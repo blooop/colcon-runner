@@ -6,7 +6,8 @@ NAME
     cr - Colcon Runner: concise CLI for common colcon tasks.
 
 SYNOPSIS
-    cr [PKG] [VERB]
+    cr [PKG] [VERB] [OPTIONS]
+    cr [VERB] [PKG] [OPTIONS]
     cr --help | -h
     cr --version | -v
     cr --install-shell-integration
@@ -15,9 +16,11 @@ DESCRIPTION
     A minimal wrapper around colcon providing short, mnemonic commands
     for build, test, clean, and package selection operations.
 
-    If the first argument matches a known package in the workspace, it
-    is used as the target package. Otherwise it is treated as a verb
-    string.
+    Both argument orders are supported.  If the first positional
+    argument cannot be parsed as a verb string and matches a known
+    package in the workspace, it is used as the target package (package-
+    first mode).  Otherwise it is treated as a verb string (verb-first
+    mode).
 
 STATE
     s       set a default package for subsequent commands.
@@ -44,26 +47,26 @@ USAGE EXAMPLES
 
   Package only (tab-completable):
     cr pkg_1
-        Build upto 'pkg_1' and its dependencies. (default action)
+        Build up to 'pkg_1' and its dependencies. (default action)
 
   Package with verb:
     cr pkg_1 b
-        Build upto 'pkg_1' and its dependencies.
+        Build up to 'pkg_1' and its dependencies.
 
     cr pkg_1 bo
         Build only 'pkg_1'.
 
     cr pkg_1 bu
-        Build upto 'pkg_1' and its dependencies. (explicit)
+        Build up to 'pkg_1' and its dependencies. (explicit)
 
     cr pkg_1 t
-        Test upto 'pkg_1' and its dependencies.
+        Test up to 'pkg_1' and its dependencies.
 
     cr pkg_1 to
         Test only 'pkg_1'.
 
     cr pkg_1 c
-        Clean upto 'pkg_1'.
+        Clean up to 'pkg_1'.
 
     cr pkg_1 co
         Clean only 'pkg_1'.
@@ -95,19 +98,19 @@ USAGE EXAMPLES
 
   Compound commands:
     cr pkg_1 bt
-        Build upto 'pkg_1', then test upto 'pkg_1'.
+        Build up to 'pkg_1', then test up to 'pkg_1'.
 
     cr pkg_1 boto
         Build only 'pkg_1', then test only 'pkg_1'.
 
     cr pkg_1 cbt
-        Clean upto, build upto, test upto 'pkg_1'.
+        Clean up to 'pkg_1', build up to 'pkg_1', test up to 'pkg_1'.
 
     cr cbt
         Clean all, build all, test all.
 
     cr pkg_1 cabuto
-        Clean all, build upto 'pkg_1', test only 'pkg_1'.
+        Clean all, build up to 'pkg_1', test only 'pkg_1'.
 
 OPTIONS
     --help, -h
@@ -121,10 +124,13 @@ OPTIONS
         after successful cr commands and tab completion of package names.
 
 NOTES
-    - If the first argument matches a known package in the workspace,
-      it is used as the target package with a default specifier of "u"
-      (up-to). Otherwise it is parsed as a verb string with a default
-      specifier of "a" (all).
+    - If the first positional argument cannot be parsed as a verb
+      string and matches a known workspace package, it is used as the
+      target package with a default specifier of "u" (up-to).
+      Otherwise it is parsed as a verb string with a default specifier
+      of "a" (all).  Verb-first parsing takes priority, so packages
+      whose names happen to look like valid verb strings (e.g. "b")
+      will not shadow the verb.
     - The 's' verb sets a default package name stored in a config file.
     - The 'i' verb runs rosdep install and supports the same specifiers.
     - Subsequent commands that require a package argument will use the
@@ -563,6 +569,11 @@ _cr_completions() {{
     COMPREPLY=()
     local cur="${{COMP_WORDS[COMP_CWORD]}}"
 
+    # Do not complete packages when typing an option
+    if [[ "$cur" == -* ]]; then
+        return 0
+    fi
+
     # Complete package names at first or second argument position (cr PKG or cr VERB PKG)
     if [[ $COMP_CWORD -eq 1 ]] || [[ $COMP_CWORD -eq 2 ]]; then
         local packages
@@ -719,13 +730,25 @@ def main(argv=None) -> None:
 
     try:
         # Detect package-first vs verb-first argument order.
-        # If argv[0] matches a known package, treat it as package-first mode.
+        # Prefer verb-first when argv[0] can be parsed as verbs; only fall
+        # back to package-first when verb parsing fails and argv[0] is a
+        # known package.  This avoids calling _list_packages() on every
+        # invocation and preserves backward compatibility when a package
+        # name happens to overlap with a valid verb string (e.g. "b").
+        verb_parse_ok = False
         try:
-            known_packages = set(_list_packages())
-        except Exception:
-            known_packages = set()
+            _parse_verbs(argv[0])
+            verb_parse_ok = True
+        except ParseError:
+            pass
 
-        pkg_first = argv[0] in known_packages
+        pkg_first = False
+        if not verb_parse_ok:
+            try:
+                known_packages = set(_list_packages())
+            except (ParseError, OSError):
+                known_packages = set()
+            pkg_first = argv[0] in known_packages
 
         if pkg_first:
             # Package-first mode: cr PKG [VERB] [OPTIONS]

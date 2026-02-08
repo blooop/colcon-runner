@@ -1083,6 +1083,8 @@ class InitBashTests(unittest.TestCase):
         self.assertIn("complete -F _cr_completions cr", script)
         self.assertIn("COMP_CWORD -eq 1", script)
         self.assertIn("COMP_CWORD -eq 2", script)
+        # Should skip completion when typing an option (--something)
+        self.assertIn('-*', script)
 
     def test_init_bash_contains_cr_wrapper(self):
         """Test that _get_init_bash includes the cr() wrapper with targeted sourcing."""
@@ -1445,14 +1447,32 @@ class VerbFirstBackwardCompatTests(unittest.TestCase):
         """Package-first mode should not trigger the 'defaulted to all' warning."""
         with mock.patch.object(colcon_runner, "subprocess") as m_sp:
             m_sp.run.return_value.returncode = 0
-            buf = io.StringIO()
             # my_pkg ca -> clean all; no warning since it's package-first mode
-            with contextlib.redirect_stdout(buf):
-                colcon_runner.main(["my_pkg", "ca", "--dry-run"])
-            # If a warning was logged, assertLogs would catch it. Instead verify no warning.
-            # We can't use assertNoLogs (3.10+), so just verify the output is correct
+            with mock.patch.object(colcon_runner.logger, "warning") as mock_warn:
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    colcon_runner.main(["my_pkg", "ca", "--dry-run"])
+                mock_warn.assert_not_called()
             output = buf.getvalue()
             self.assertIn("colcon clean workspace", output)
+
+    def test_verb_like_package_name_stays_verb_first(self):
+        """A package named 'b' should not shadow the 'b' verb."""
+        # _list_packages returns a package named "b"
+        self.list_patch.stop()
+        with mock.patch.object(
+            colcon_runner, "_list_packages", return_value=["b", "my_pkg"]
+        ):
+            with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+                m_sp.run.return_value.returncode = 0
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    colcon_runner.main(["b", "--dry-run"])
+                output = buf.getvalue()
+                # "b" should be parsed as verb (build all), not as package
+                self.assertIn("colcon build --dry-run", output)
+                self.assertNotIn("--packages-up-to", output)
+        self.list_patch.start()
 
 
 class PackageFirstListPackagesFailureTests(unittest.TestCase):
@@ -1468,7 +1488,7 @@ class PackageFirstListPackagesFailureTests(unittest.TestCase):
     def test_list_packages_exception_falls_back_to_verb_first(self):
         """When _list_packages raises, fall back to verb-first mode."""
         with mock.patch.object(
-            colcon_runner, "_list_packages", side_effect=RuntimeError("boom")
+            colcon_runner, "_list_packages", side_effect=OSError("boom")
         ):
             with mock.patch.object(colcon_runner, "subprocess") as m_sp:
                 m_sp.run.return_value.returncode = 0
