@@ -1,6 +1,6 @@
 [project]
 name = "colcon-runner"
-version = "0.12.1"
+version = "0.12.2"
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A concise CLI wrapper for colcon build/test/clean workflows."
 readme = "README.md"
