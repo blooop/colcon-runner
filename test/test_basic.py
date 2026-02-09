@@ -398,6 +398,7 @@ class CleanEnvTests(unittest.TestCase):
                 {
                     "AMENT_PREFIX_PATH": "/some/underlay/install/pkg",
                     "CMAKE_PREFIX_PATH": "/some/underlay/install/pkg",
+                    "SOME_OTHER_VAR": "keep_me",
                 },
             ):
                 colcon_runner.main(["co", "test_pkg"])
@@ -409,6 +410,7 @@ class CleanEnvTests(unittest.TestCase):
             self.assertIsNotNone(env, "subprocess.run should receive an env dict for clean")
             self.assertNotIn("AMENT_PREFIX_PATH", env)
             self.assertNotIn("CMAKE_PREFIX_PATH", env)
+            self.assertEqual(env.get("SOME_OTHER_VAR"), "keep_me")
 
     def test_build_does_not_clear_underlay_env_vars(self):
         """Build commands should NOT modify the environment."""
