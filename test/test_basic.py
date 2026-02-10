@@ -378,6 +378,60 @@ class IntegrationTests(unittest.TestCase):
             m_sp.run.assert_not_called()
 
 
+class CleanEnvTests(unittest.TestCase):
+    """Test that clean commands clear underlay env vars."""
+
+    def setUp(self):
+        self.workspace_patch = mock.patch.object(
+            colcon_runner, "_find_workspace_root", return_value="/test/workspace"
+        )
+        self.workspace_patch.start()
+        self.addCleanup(self.workspace_patch.stop)
+
+    def test_clean_clears_underlay_env_vars(self):
+        """subprocess.run should receive env without AMENT_PREFIX_PATH and CMAKE_PREFIX_PATH."""
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "AMENT_PREFIX_PATH": "/some/underlay/install/pkg",
+                    "CMAKE_PREFIX_PATH": "/some/underlay/install/pkg",
+                    "SOME_OTHER_VAR": "keep_me",
+                },
+            ):
+                colcon_runner.main(["co", "test_pkg"])
+
+            # subprocess.run should have been called with an env kwarg
+            m_sp.run.assert_called_once()
+            call_kwargs = m_sp.run.call_args
+            env = call_kwargs.kwargs.get("env") or call_kwargs[1].get("env")
+            self.assertIsNotNone(env, "subprocess.run should receive an env dict for clean")
+            self.assertNotIn("AMENT_PREFIX_PATH", env)
+            self.assertNotIn("CMAKE_PREFIX_PATH", env)
+            self.assertEqual(env.get("SOME_OTHER_VAR"), "keep_me")
+
+    def test_build_does_not_clear_underlay_env_vars(self):
+        """Build commands should NOT modify the environment."""
+        with mock.patch.object(colcon_runner, "subprocess") as m_sp:
+            m_sp.run.return_value.returncode = 0
+
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "AMENT_PREFIX_PATH": "/some/underlay/install/pkg",
+                    "CMAKE_PREFIX_PATH": "/some/underlay/install/pkg",
+                },
+            ):
+                colcon_runner.main(["ba"])
+
+            m_sp.run.assert_called_once()
+            call_kwargs = m_sp.run.call_args
+            env = call_kwargs.kwargs.get("env") or call_kwargs[1].get("env")
+            self.assertIsNone(env, "build should not pass a custom env")
+
+
 class UpdateCacheTests(unittest.TestCase):
     # pylint: disable=protected-access
     def setUp(self):

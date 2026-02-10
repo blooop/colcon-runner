@@ -553,6 +553,10 @@ def _run_tool(tool: str, args: List[str], extra_opts: List[str]) -> None:
     if tool == "rosdep":
         env = os.environ.copy()
         env["PYTHONWARNINGS"] = "ignore::DeprecationWarning"
+    elif safe_args and safe_args[0] == "clean":
+        env = os.environ.copy()
+        env.pop("AMENT_PREFIX_PATH", None)
+        env.pop("CMAKE_PREFIX_PATH", None)
 
     # Use subprocess.run with shell=False for safety
     ret = subprocess.run(cmd, check=False, env=env).returncode
