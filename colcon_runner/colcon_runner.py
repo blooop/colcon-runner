@@ -541,12 +541,12 @@ def _handle_rosdep_update(extra_opts: List[str]) -> None:
 
 
 def _filter_existing_paths(path_string: str) -> str:
-    """Filter a colon-separated path string to only include paths that exist."""
+    """Filter a path-separated string to only include paths that exist."""
     if not path_string:
         return ""
-    paths = path_string.split(":")
+    paths = path_string.split(os.pathsep)
     existing = [p for p in paths if p and os.path.exists(p)]
-    return ":".join(existing)
+    return os.pathsep.join(existing)
 
 
 def _prepare_colcon_env() -> dict:

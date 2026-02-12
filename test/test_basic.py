@@ -388,16 +388,26 @@ class ColconEnvTests(unittest.TestCase):
         self.workspace_patch.start()
         self.addCleanup(self.workspace_patch.stop)
 
+        # Mock os.path.exists to control which paths "exist"
+        self.existing_paths = set()
+        self.exists_patch = mock.patch.object(
+            colcon_runner.os.path, "exists", side_effect=lambda p: p in self.existing_paths
+        )
+        self.exists_patch.start()
+        self.addCleanup(self.exists_patch.stop)
+
     def test_colcon_filters_nonexistent_paths(self):
         """Colcon commands should filter out non-existent paths from env vars."""
+        self.existing_paths = {"/opt/ros/humble", "/opt/ros/jazzy"}
+
         with mock.patch.object(colcon_runner, "subprocess") as m_sp:
             m_sp.run.return_value.returncode = 0
 
             with mock.patch.dict(
                 os.environ,
                 {
-                    "AMENT_PREFIX_PATH": "/nonexistent/path:/tmp",
-                    "CMAKE_PREFIX_PATH": "/another/nonexistent:/tmp",
+                    "AMENT_PREFIX_PATH": "/stale/underlay:/opt/ros/humble",
+                    "CMAKE_PREFIX_PATH": "/another/stale:/opt/ros/jazzy",
                     "SOME_OTHER_VAR": "keep_me",
                 },
                 clear=True,
@@ -408,21 +418,22 @@ class ColconEnvTests(unittest.TestCase):
             call_kwargs = m_sp.run.call_args
             env = call_kwargs.kwargs.get("env") or call_kwargs[1].get("env")
             self.assertIsNotNone(env, "subprocess.run should receive an env dict")
-            # /tmp exists, so it should be preserved; /nonexistent paths should be filtered
-            self.assertEqual(env.get("AMENT_PREFIX_PATH"), "/tmp")
-            self.assertEqual(env.get("CMAKE_PREFIX_PATH"), "/tmp")
+            self.assertEqual(env.get("AMENT_PREFIX_PATH"), "/opt/ros/humble")
+            self.assertEqual(env.get("CMAKE_PREFIX_PATH"), "/opt/ros/jazzy")
             self.assertEqual(env.get("SOME_OTHER_VAR"), "keep_me")
 
     def test_colcon_removes_env_var_when_all_paths_nonexistent(self):
         """Env var should be removed entirely if all paths are non-existent."""
+        self.existing_paths = set()  # No paths exist
+
         with mock.patch.object(colcon_runner, "subprocess") as m_sp:
             m_sp.run.return_value.returncode = 0
 
             with mock.patch.dict(
                 os.environ,
                 {
-                    "AMENT_PREFIX_PATH": "/nonexistent/path:/also/nonexistent",
-                    "CMAKE_PREFIX_PATH": "/another/nonexistent",
+                    "AMENT_PREFIX_PATH": "/stale/path:/also/stale",
+                    "CMAKE_PREFIX_PATH": "/another/stale",
                     "SOME_OTHER_VAR": "keep_me",
                 },
                 clear=True,
@@ -439,14 +450,16 @@ class ColconEnvTests(unittest.TestCase):
 
     def test_build_preserves_existing_paths(self):
         """Build commands should preserve existing paths in env vars."""
+        self.existing_paths = {"/opt/ros/humble", "/opt/ros/jazzy"}
+
         with mock.patch.object(colcon_runner, "subprocess") as m_sp:
             m_sp.run.return_value.returncode = 0
 
             with mock.patch.dict(
                 os.environ,
                 {
-                    "AMENT_PREFIX_PATH": "/tmp:/usr",
-                    "CMAKE_PREFIX_PATH": "/tmp",
+                    "AMENT_PREFIX_PATH": "/opt/ros/humble:/opt/ros/jazzy",
+                    "CMAKE_PREFIX_PATH": "/opt/ros/humble",
                 },
                 clear=True,
             ):
@@ -456,39 +469,55 @@ class ColconEnvTests(unittest.TestCase):
             call_kwargs = m_sp.run.call_args
             env = call_kwargs.kwargs.get("env") or call_kwargs[1].get("env")
             self.assertIsNotNone(env)
-            # Both /tmp and /usr exist, so both should be preserved
+            self.assertEqual(env.get("AMENT_PREFIX_PATH"), "/opt/ros/humble:/opt/ros/jazzy")
+            self.assertEqual(env.get("CMAKE_PREFIX_PATH"), "/opt/ros/humble")
 
 
 class FilterExistingPathsTests(unittest.TestCase):
+    # pylint: disable=protected-access
     """Unit tests for _filter_existing_paths helper function."""
+
+    def setUp(self):
+        # Mock os.path.exists to control which paths "exist"
+        self.existing_paths = set()
+        self.exists_patch = mock.patch.object(
+            colcon_runner.os.path, "exists", side_effect=lambda p: p in self.existing_paths
+        )
+        self.exists_patch.start()
+        self.addCleanup(self.exists_patch.stop)
 
     def test_empty_string_returns_empty(self):
         self.assertEqual(colcon_runner._filter_existing_paths(""), "")
 
     def test_all_paths_exist(self):
-        result = colcon_runner._filter_existing_paths("/tmp:/usr")
-        self.assertEqual(result, "/tmp:/usr")
+        self.existing_paths = {"/existing_a", "/existing_b"}
+        result = colcon_runner._filter_existing_paths("/existing_a:/existing_b")
+        self.assertEqual(result, "/existing_a:/existing_b")
 
     def test_no_paths_exist(self):
-        result = colcon_runner._filter_existing_paths("/nonexistent:/also/fake")
+        self.existing_paths = set()
+        result = colcon_runner._filter_existing_paths("/missing_a:/missing_b")
         self.assertEqual(result, "")
 
     def test_mixed_paths(self):
-        result = colcon_runner._filter_existing_paths("/nonexistent:/tmp:/fake:/usr")
-        self.assertEqual(result, "/tmp:/usr")
+        self.existing_paths = {"/existing_a", "/existing_b"}
+        result = colcon_runner._filter_existing_paths("/missing:/existing_a:/fake:/existing_b")
+        self.assertEqual(result, "/existing_a:/existing_b")
 
     def test_single_existing_path(self):
-        result = colcon_runner._filter_existing_paths("/tmp")
-        self.assertEqual(result, "/tmp")
+        self.existing_paths = {"/existing"}
+        result = colcon_runner._filter_existing_paths("/existing")
+        self.assertEqual(result, "/existing")
 
     def test_single_nonexistent_path(self):
+        self.existing_paths = set()
         result = colcon_runner._filter_existing_paths("/nonexistent")
         self.assertEqual(result, "")
 
     def test_empty_segments_filtered(self):
-        # Empty segments (from "::") should be filtered out
-        result = colcon_runner._filter_existing_paths("/tmp::/usr")
-        self.assertEqual(result, "/tmp:/usr")
+        self.existing_paths = {"/existing_a", "/existing_b"}
+        result = colcon_runner._filter_existing_paths("/existing_a::/existing_b")
+        self.assertEqual(result, "/existing_a:/existing_b")
 
 
 class UpdateCacheTests(unittest.TestCase):
