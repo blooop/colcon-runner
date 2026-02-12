@@ -540,6 +540,30 @@ def _handle_rosdep_update(extra_opts: List[str]) -> None:
     _mark_updated()
 
 
+def _filter_existing_paths(path_string: str) -> str:
+    """Filter a path-separated string to only include paths that exist."""
+    if not path_string:
+        return ""
+    paths = path_string.split(os.pathsep)
+    existing = [p for p in paths if p and os.path.exists(p)]
+    return os.pathsep.join(existing)
+
+
+def _prepare_colcon_env() -> dict:
+    """Prepare environment for colcon commands, filtering out non-existent paths."""
+    env = os.environ.copy()
+    # Filter out non-existent paths from ROS/colcon path variables
+    # This prevents warnings about stale underlay paths after workspace cleaning
+    for var in ("AMENT_PREFIX_PATH", "CMAKE_PREFIX_PATH"):
+        if var in env:
+            filtered = _filter_existing_paths(env[var])
+            if filtered:
+                env[var] = filtered
+            else:
+                del env[var]
+    return env
+
+
 def _run_tool(tool: str, args: List[str], extra_opts: List[str]) -> None:
     """Run a tool (colcon or rosdep) with the given arguments."""
     # Defensive: ensure all args are strings and not user-controlled shell input
@@ -553,10 +577,8 @@ def _run_tool(tool: str, args: List[str], extra_opts: List[str]) -> None:
     if tool == "rosdep":
         env = os.environ.copy()
         env["PYTHONWARNINGS"] = "ignore::DeprecationWarning"
-    elif safe_args and safe_args[0] == "clean":
-        env = os.environ.copy()
-        env.pop("AMENT_PREFIX_PATH", None)
-        env.pop("CMAKE_PREFIX_PATH", None)
+    elif tool == "colcon":
+        env = _prepare_colcon_env()
 
     # Use subprocess.run with shell=False for safety
     ret = subprocess.run(cmd, check=False, env=env).returncode
