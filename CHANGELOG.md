@@ -2,6 +2,26 @@
 
 ## colcon_runner
 
+## [0.12.5] - 2026-02-13
+
+### Changed
+- Updated CHANGELOG with missing entries for 0.12.2–0.12.4
+
+## [0.12.4] - 2026-02-12
+
+### Changed
+- Filter non-existent paths from `AMENT_PREFIX_PATH` and `CMAKE_PREFIX_PATH` for all colcon commands (build, test, clean)
+
+## [0.12.3] - 2026-02-10
+
+### Fixed
+- Clear stale underlay env vars (`AMENT_PREFIX_PATH`, `CMAKE_PREFIX_PATH`) for colcon clean operations
+
+## [0.12.2] - 2026-02-08
+
+### Fixed
+- Shell integration now uses `--install-base` to resolve the correct install path
+
 ## [0.12.0] - 2026-02-08
 
 ### Added
