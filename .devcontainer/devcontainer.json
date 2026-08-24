@@ -38,7 +38,8 @@
         "XDG_DATA_HOME": "/home/vscode/.local/share"
     },
     "mounts": [
-        "source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume"
+        "source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume",
+        "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind"
     ],
     "postCreateCommand": "sudo chown vscode .pixi && pixi install",
     // "name" lives at the end on purpose: it is the only line this repo
