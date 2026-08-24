@@ -1,5 +1,4 @@
 {
-    "name": "colcon_runner",
     "build": {
         "dockerfile": "Dockerfile",
         "context": ".."
@@ -26,6 +25,9 @@
 		// "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
 		// "ghcr.io/jsburckhardt/devcontainer-features/codex:latest": {}
     },
+    // --network=host stays. ROS 2 DDS discovery is multicast, and the default
+    // bridge network does not carry it, so this container needs the host's
+    // network even though the rest of the fleet is dropping this flag.
     "runArgs": [
         "--network=host"
     ],
@@ -33,13 +35,13 @@
         "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
         "XDG_CONFIG_HOME": "/home/vscode/.config",
         "XDG_CACHE_HOME": "/home/vscode/.cache",
-        "XDG_DATA_HOME": "/home/vscode/.local/share",
-        "SSH_AUTH_SOCK": "/home/vscode/.ssh/agent.sock"
+        "XDG_DATA_HOME": "/home/vscode/.local/share"
     },
     "mounts": [
-        "source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume",
-        "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind",
-        "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind"
+        "source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume"
     ],
-    "postCreateCommand": "sudo chown vscode .pixi && pixi install"
+    "postCreateCommand": "sudo chown vscode .pixi && pixi install",
+    // "name" lives at the end on purpose: it is the only line this repo
+    // changes, and next to the build block every template merge conflicts.
+    "name": "colcon_runner"
 }
